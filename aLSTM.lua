@@ -644,10 +644,26 @@ function aLSTM:clear()
 
 end
 
--- evaluate state
+-- define type
+function aLSTM:type(type, ...)
+	return parent.type(self, type, ...)
+end
+
+-- evaluate
 function aLSTM:evaluate()
 	self.train = false
 	self:clear()
+	for _, module in ipairs(self.modules) do
+		module:evaluate()
+	end
+end
+
+-- train
+function aLSTM:training()
+	self.train = true
+	for _, module in ipairs(self.modules) do
+		module:training()
+	end
 end
 
 -- reset the module
@@ -779,5 +795,12 @@ function aLSTM:_tanh_updateGradInput(input, gradOutput)
 	_gradInput:addcmul(-1,gradOutput,gradOutput)
 
 	return _gradInput
+
+end
+
+-- introduce self
+function aLSTM:__tostring__()
+
+	return string.format('%s(%d -> %d)', torch.type(self), self.inputSize, self.outputSize)
 
 end
