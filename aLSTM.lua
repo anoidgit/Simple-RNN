@@ -763,10 +763,11 @@ end
 -- copy a table
 function aLSTM:_cloneTable(tbsrc)
 
-	local tbrs
+	local tbrs = {}
 	for k,v in ipairs(tbsrc) do
-		tbrs[k]=v
+		tbrs[k] = v
 	end
+
 	return tbrs
 end
 
