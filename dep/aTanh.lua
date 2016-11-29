@@ -5,7 +5,7 @@
 
 	This scripts implement a standard tanh activation function
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
@@ -19,7 +19,7 @@ end
 
 function aTanh:updateOutput(input)
 
-	self.output = input:tanh()
+	self.output = torch.tanh(input)
 
 	return self.output
 
