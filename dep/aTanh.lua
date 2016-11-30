@@ -5,7 +5,7 @@
 
 	This scripts implement a standard tanh activation function
 
-	Version 0.0.2
+	Version 0.0.3
 
 ]]
 
@@ -29,7 +29,8 @@ function aTanh:updateGradInput(input, gradOutput)
 
 	local gradInput = input.new()
 	gradInput:resizeAs(input):fill(1)
-	gradInput:addcmul(-1,gradOutput,gradOutput)
+	gradInput:addcmul(-1,self.output,self.output)
+	gradInput:cmul(gradOutput)
 	self.gradInput = gradInput
 
 	return gradInput
