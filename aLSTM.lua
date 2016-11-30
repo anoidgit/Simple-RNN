@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.4
+	Version 0.0.5
 
 ]]
 
@@ -63,10 +63,10 @@ function aLSTM:_step_updateOutput(input)
 
 	-- ensure cell and output are ready for the first step
 	if not self.cell then
-		-- set batch size and prepare the cell and output
-		local _nIdim = input:nDimension()
+	-- set batch size and prepare the cell and output
+	local _nIdim = input[1]:nDimension()
 		if _nIdim>1 then
-			self.batchsize = input:size(1)
+			self.batchsize = input[1]:size(1)
 			self.cell0 = torch.repeatTensor(self.sbm.bias:narrow(1, 1, self.outputSize), self.batchsize, 1)
 			self.output0 = torch.repeatTensor(self.sbm.bias:narrow(1, self.fgstartid, self.outputSize), self.batchsize, 1)
 			-- narrow dimension
@@ -106,11 +106,12 @@ function aLSTM:_step_updateOutput(input)
 
 	-- if training, remember what should remember
 	if self.train then
-		table.insert(self._cell, self.cell)
-		table.insert(self._output, self.output)
-		table.insert(self.otanh, _otanh)
-		table.insert(self.ofgate, _fgo)
-		table.insert(self.ougate, _zo)
+		table.insert(self._cell, self.cell)--c[t]
+		table.insert(self._output, self.output)--h[t]
+		table.insert(self.otanh, _otanh)--tanh[t]
+		table.insert(self.oifgate, _ifgo)--if[t], input and forget
+		table.insert(self.ohid, _zo)--z[t]
+		table.insert(self.oogate, _ogo)--o[t]
 	end
 
 	-- return the output for this input
@@ -236,6 +237,10 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 	-- grad to cell, gate and input
 	local _gCell, _gg, gradInput
 
+	-- pre claim the local variable, they were discribed where they were used.
+	local _cInput, _cPrevOutput, _cPrevCell, _cotanh, _coifgate, _coogate, _coz, _coigate, _cofgate, _gg
+	local __gLCell
+
 	-- if this is not the last step
 	if self.__gLOutput then
 
@@ -245,13 +250,18 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			-- add gradOutput from the sequence behind
 			gradOutput:add(self._gLOutput)
 
-			local _cInput = table.remove(input)-- current input
-			local _cPrevOutput = table.remove(self._output)-- previous output
-			local _cPrevCell = table.remove(self._cell)-- previous cell
+			_cInput = table.remove(input)-- current input
+			_cPrevOutput = table.remove(self._output)-- previous output
+			_cPrevCell = table.remove(self._cell)-- previous cell
 
-			local _cotanh = table.remove(self.otanh)-- output of the tanh after cell for the final output
-			local _cofgate = table.remove(self.ofgate)-- output of the forget gate
-			local _cougate = table.remove(self.ougate)-- output of the update gate
+			_cotanh = table.remove(self.otanh)-- output of the tanh after cell for the final output
+			_coifgate = table.remove(self.oifgate)-- output of the input and forget gate
+			_coogate = table.remove(self.oogate)-- output of the output gate
+			_coz = table.remove(self.ohid)-- hidden unit produced by input
+
+			-- asign output of input gate and output gate
+			_coigate = _coifgate:narrow(self.narrowDim, 1, self.outputSize) 
+			_cofgate = _coifgate:narrow(self.narrowDim, self.fgstartid, self.outputSize)
 
 			-- backward
 
@@ -261,14 +271,14 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			-- backward output gate
 			gradInput, self._gLOutput, _gCell = unpack(self.ogate:backward({_cInput, _cPrevOutput, self.cell}, _gg, scale))
 
+			-- backward from the output tanh to cell
+			_gCell:add(self.tanh:updateGradInput(self.cell, torch.cmul(gradOutput, _coogate)))
+
 			-- add gradOutput from the sequence behind
 			_gCell:add(self._gLCell)
 
-			-- backward from the output tanh to cell
-			_gCell:add(self.tanh:updateGradInput(self.cell, torch.cmul(gradOutput, _cPrevOutput)))
-
-			-- backward update gate
-			local __gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _cougate), scale))
+			-- backward hidden
+			local __gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
 			gradInput:add(__gInput)
 			self._gLOutput:add(__gLOutput)
 
@@ -278,8 +288,8 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			-- backward ifgate(input and forget gate)
 			-- compute gradOutput
 			_gg:resize(self.batchsize, 2 * self.outputSize)
-			_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
-			_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cougate))
+			_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _coz))
+			_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
 			-- backward the gate
 			__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
 			gradInput:add(__gInput)
@@ -296,13 +306,19 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			-- add gradOutput from the sequence behind
 			gradOutput:add(self._gLOutput)
 
-			local _cInput = table.remove(input)-- current input
-			local _cPrevOutput = self.output0-- previous output
-			local _cPrevCell = self.cell0-- previous cell
+			_cInput = table.remove(input)-- current input
+			_cPrevOutput = self.output0-- previous output
+			_cPrevCell = self.cell0-- previous cell
 
-			local _cotanh = table.remove(self.otanh)-- output of the tanh after cell for the final output
-			local _cofgate = table.remove(self.ofgate)-- output of the forget gate
-			local _cougate = table.remove(self.ougate)-- output of the update gate
+			_cotanh = table.remove(self.otanh)-- output of the tanh after cell for the final output
+
+			_coifgate = table.remove(self.oifgate)-- output of the input and forget gate
+			_coogate = table.remove(self.oogate)-- output of the output gate
+			_coz = table.remove(self.ohid)-- hidden unit produced by input
+
+			-- asign output of input gate and output gate
+			_coigate = _coifgate:narrow(self.narrowDim, 1, self.outputSize) 
+			_cofgate = _coifgate:narrow(self.narrowDim, self.fgstartid, self.outputSize)
 
 			-- backward
 
@@ -311,14 +327,14 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			-- backward output gate
 			gradInput, self._gLOutput, _gCell = unpack(self.ogate:backward({_cInput, _cPrevOutput, self.cell}, _gg, scale))
 
+			-- backward from the output tanh to cell
+			_gCell:add(self.tanh:updateGradInput(self.cell, torch.cmul(gradOutput, _coogate)))
+
 			-- add gradOutput from the sequence behind
 			_gCell:add(self._gLCell)
 
-			-- backward from the output tanh to cell
-			_gCell:add(self.tanh:updateGradInput(self.cell, torch.cmul(gradOutput, _cPrevOutput)))
-
-			-- backward update gate
-			local __gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _cougate), scale))
+			-- backward hidden
+			local __gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
 			gradInput:add(__gInput)
 			self._gLOutput:add(__gLOutput)
 
@@ -328,8 +344,8 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			-- backward ifgate(input and forget gate)
 			-- compute gradOutput
 			_gg:resize(self.batchsize, 2 * self.outputSize)
-			_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
-			_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cougate))
+			_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _coz))
+			_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
 			-- backward the gate
 			__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
 			gradInput:add(__gInput)
@@ -357,13 +373,23 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 		--backward the last
 
 		-- prepare data for future use
-		local _cInput = table.remove(input)-- current input
-		local _cPrevOutput = table.remove(self._output)-- previous output
-		local _cPrevCell = table.remove(self._cell)-- previous cell
+		_cInput = table.remove(input)-- current input
+		if #self._output > 0 then-- for #input > 1
+			_cPrevOutput = table.remove(self._output)-- previous output
+			_cPrevCell = table.remove(self._cell)-- previous cell
+		else
+			_cPrevOutput = self.output0
+			_cPrevCell = self.cell0
+		end
 
-		local _cotanh = table.remove(self.otanh)-- output of the tanh after cell for the final output
-		local _cofgate = table.remove(self.ofgate)-- output of the forget gate
-		local _cougate = table.remove(self.ougate)-- output of the update gate
+		_cotanh = table.remove(self.otanh)-- output of the tanh after cell for the final output, tanh[t]
+		_coifgate = table.remove(self.oifgate)-- output of the input and forget gate, if[t], input and forget
+		_coogate = table.remove(self.oogate)-- output of the output gate, o[t]
+		_coz = table.remove(self.ohid)-- hidden unit produced by input, z[t]
+
+		-- asign output of input gate and output gate
+		_coigate = _coifgate:narrow(self.narrowDim, 1, self.outputSize)-- i[t]
+		_cofgate = _coifgate:narrow(self.narrowDim, self.fgstartid, self.outputSize)--f[t] 
 
 		-- backward
 
@@ -374,10 +400,10 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 		gradInput, self._gLOutput, _gCell = unpack(self.ogate:backward({_cInput, _cPrevOutput, self.cell}, _gg, scale))
 
 		-- backward from the output tanh to cell
-		_gCell:add(self.tanh:updateGradInput(self.cell, torch.cmul(gradOutput, _cPrevOutput)))
+		_gCell:add(self.tanh:updateGradInput(self.cell, torch.cmul(gradOutput, _coogate)))
 
-		-- backward update gate
-		local __gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _cougate), scale))
+		-- backward hidden
+		local __gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
 		gradInput:add(__gInput)
 		self._gLOutput:add(__gLOutput)
 
@@ -387,10 +413,9 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 		-- backward ifgate(input and forget gate)
 		-- compute gradOutput
 		_gg:resize(self.batchsize, 2 * self.outputSize)
-		_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
-		_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cougate))
+		_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _coz))
+		_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
 		-- backward the gate
-		local __gLCell
 		__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
 		gradInput:add(__gInput)
 		self._gLOutput:add(__gLOutput)
@@ -750,7 +775,7 @@ function aLSTM:reset()
 
 	-- module used to compute the forward and backward of tanh
 	-- It seems does not need to be put in self.modules
-	self.tanh = nn.aTanh
+	self.tanh = nn.aTanh()
 
 	--[[ put the modules in self.modules,
 	so the default method could be done correctly]]
