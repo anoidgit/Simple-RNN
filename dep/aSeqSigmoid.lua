@@ -3,13 +3,13 @@
 
 	Copyright (c) 2016 Hongfei Xu
 
-	This scripts implement a standard tanh activation function,
+	This scripts implement a standard sigmoid activation function,
 	It forward the sequence from head to tail,
 	and backward in reverse order.
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
