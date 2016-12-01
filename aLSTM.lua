@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.7
+	Version 0.0.8
 
 ]]
 
@@ -74,8 +74,13 @@ function aLSTM:_step_updateOutput(input)
 			self.batchsize = input:size(1)
 
 			if self.rememberState and self.lastCell then
-				self.cell0 = self.lastCell:narrow(1, 1, self.batchsize)
-				self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
+				if self.lastCell:size(1) == self.batchsize then
+					self.cell0 = self.lastCell
+					self.output0 = self.lastOutput
+				else
+					self.cell0 = self.lastCell:narrow(1, 1, self.batchsize)
+					self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
+				end
 			else
 				self.cell0 = torch.repeatTensor(self.sbm.bias:narrow(1, 1, self.outputSize), self.batchsize, 1)
 				self.output0 = torch.repeatTensor(self.sbm.bias:narrow(1, self.fgstartid, self.outputSize), self.batchsize, 1)
@@ -150,8 +155,13 @@ function aLSTM:_seq_updateOutput(input)
 
 		-- if need start from last state of the previous sequence
 		if self.rememberState and self.lastCell then
-			self.cell0 = self.lastCell:narrow(1, 1, self.batchsize)
-			self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
+			if self.lastCell:size(1) == self.batchsize then
+				self.cell0 = self.lastCell
+				self.output0 = self.lastOutput
+			else
+				self.cell0 = self.lastCell:narrow(1, 1, self.batchsize)
+				self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
+			end
 		else
 			self.cell0 = torch.repeatTensor(self.sbm.bias:narrow(1, 1, self.outputSize), self.batchsize, 1)
 			self.output0 = torch.repeatTensor(self.sbm.bias:narrow(1, self.fgstartid, self.outputSize), self.batchsize, 1)
