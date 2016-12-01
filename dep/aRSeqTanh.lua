@@ -3,22 +3,26 @@
 
 	Copyright (c) 2016 Hongfei Xu
 
-	This scripts implement a standard tanh activation function
+	This scripts implement a standard tanh activation function,
+	It forward the sequence from head to tail,
+	and backward in reverse order.
 
-	Version 0.0.1
+	Designed for Recurrent Neural Networks
+
+	Version 0.0.3
 
 ]]
 
-local aSeqTanh = torch.class('nn.aSeqTanh', 'nn.Module')
+local aRSeqTanh = torch.class('nn.aRSeqTanh', 'nn.Module')
 
-function aSeqTanh:__init()
+function aRSeqTanh:__init()
 
 	self.backward = self.updateGradInput
-	self:clearState()
+	self:forget()
 
 end
 
-function aSeqTanh:updateOutput(input)
+function aRSeqTanh:updateOutput(input)
 
 	local output = torch.tanh(input)
 	table.insert(self._output,output)
@@ -28,9 +32,10 @@ function aSeqTanh:updateOutput(input)
 
 end
 
-function aSeqTanh:updateGradInput(input, gradOutput)
+function aRSeqTanh:updateGradInput(input, gradOutput)
 
 	local output = table.remove(self._output)
+
 	local gradInput = input.new()
 	gradInput:resizeAs(input):fill(1)
 	gradInput:addcmul(-1, output, output)
@@ -43,6 +48,6 @@ end
 
 -- Warning: This method is dangerous,
 -- unless you know what you are doing.
-function aSeqTanh:clearState()
+function aRSeqTanh:forget()
 	self._output = {}
 end
