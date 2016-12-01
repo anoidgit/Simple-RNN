@@ -12,13 +12,13 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.10
+	Version 0.0.12
 
 ]]
 
 local aLSTM, parent = torch.class('nn.aLSTM', 'nn.Container')
 
-function aLSTM:__init(inputSize, outputSize, maskZero, remember)
+function aLSTM:__init(inputSize, outputSize, maskZero, remember, seqData)
 
 	parent.__init(self)
 
@@ -37,7 +37,7 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember)
 	self:prepare()
 
 	-- asign the default method
-	self:_asign()
+	self:_asign(seqData)
 
 	-- forget gate start index
 	-- also was used in updateOutput to prepare init cell and output,
@@ -54,10 +54,17 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember)
 end
 
 -- asign default method
-function aLSTM:_asign()
+function aLSTM:_asign(seqd)
 
-	self.updateOutput = self._seq_updateOutput
-	self.backward = self._seq_backward
+	if seqd then
+		self.updateOutput = self._tseq_updateOutput
+		self.backward = self._tseq_backward
+		self._forget = self._tensor_forget
+	else
+		self.updateOutput = self._seq_updateOutput
+		self.backward = self._seq_backward
+		self._forget = self._table_forget
+	end
 	self.updateGradInput = self._seq_updateGradInput
 
 end
@@ -140,6 +147,115 @@ function aLSTM:_step_updateOutput(input)
 	end
 
 	-- return the output for this input
+	return self.output
+
+end
+
+-- updateOutput for tensor input,
+-- input tensor is expected to be seqlen * batchsize * vecsize
+function aLSTM:_tseq_updateOutput(input)
+
+	-- get input and output size
+	local iSize = input:size()
+	local oSize = iSize:clone()
+	oSize[-1] = self.outputSize
+	self._output:resize(oSize)
+
+	if self.train then
+
+		self._cell:resize(oSize)
+		self.gradInput:resize(iSize)
+		self.otanh:resize(oSize)
+		self.oogate:resize(oSize)
+		local dOSize = oSize:clone()
+		dOSize[-1] = self.outputSize * 2
+		self.oifgate:resize(dOSize)
+
+	end
+
+	-- ensure cell and output are ready for the first step
+	-- set batch size and prepare the cell and output
+	local _nIdim = input[1]:nDimension()
+	if _nIdim>1 then
+		self.batchsize = input[1]:size(1)
+
+		-- if need start from last state of the previous sequence
+		if self.rememberState and self.lastCell then
+			if self.lastCell:size(1) == self.batchsize then
+				self.cell0 = self.lastCell
+				self.output0 = self.lastOutput
+			else
+				self.cell0 = self.lastCell:narrow(1, 1, self.batchsize)
+				self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
+			end
+		else
+			self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
+			self.cell0 = self.cell0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
+			self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
+			self.output0 = self.output0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
+		end
+
+		-- narrow dimension
+		self.narrowDim = _nIdim
+	else
+		self.batchsize = nil
+
+		if self.rememberState and self.lastCell then
+			self.cell0 = self.lastCell
+			self.output0 = self.lastOutput
+		else
+			self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
+			self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
+		end
+
+		-- narrow dimension
+		self.narrowDim = 1
+	end
+	self.cell = self.cell0
+	local _output = self.output0
+
+	-- forward the whole sequence
+	for _t,iv in ipairs(input) do
+		-- compute input gate and forget gate
+		local _ifgo = self.ifgate:forward({iv, _output, self.cell})
+
+		-- get input gate and forget gate
+		local _igo = _ifgo:narrow(self.narrowDim, 1, self.outputSize)
+		local _fgo = _ifgo:narrow(self.narrowDim, self.fgstartid, self.outputSize)
+
+		-- compute hidden
+		local _zo = self.zmod:forward({iv, _output})
+
+		-- get new value of the cell
+		self.cell = torch.add(torch.cmul(_fgo, self.cell),torch.cmul(_igo,_zo))
+
+		-- compute output gate with the new cell,
+		-- this is the standard lstm,
+		-- otherwise it can be computed with input gate and forget gate
+		local _ogo = self.ogate:forward({iv, _output, self.cell})
+
+		-- compute the final output for this input
+		local _otanh = self.tanh:forward(self.cell)
+		_output = torch.cmul(_ogo, _otanh)
+
+		self._output[_t]:copy(_output)
+
+		-- if training, remember what should remember
+		if self.train then
+			self._cell[_t]:copy(self.cell)--c[t]
+			self._output[_t]:copy(_output)--h[t]
+			self.otanh[_t]:copy(_otanh)--tanh[t]
+			self.oifgate[_t]:copy(_ifgo)--if[t], input and forget
+			self.ohid[_t]:copy(_zo)--z[t]
+			self.oogate[_t]:copy(_ogo)--o[t]
+		end
+
+	end
+
+	-- this have conflict with _step_updateOutput,
+	-- but anyhow do not use them at the same time
+	self.output = self._output
+
 	return self.output
 
 end
@@ -381,8 +497,13 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			-- backward the gate
 			__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
 			gradInput:add(__gInput)
-			self._gLOutput:add(__gLOutput)
-			self._gLCell:add(__gLCell)
+
+			-- only while update init cell and output are needed,
+			-- this calc for time step 0 are needed
+			if not self.rememberState or self.firstSequence then
+				self._gLOutput:add(__gLOutput)
+				self._gLCell:add(__gLCell)
+			end
 
 			if self.rememberState then
 				if self.firstSequence then
@@ -467,10 +588,12 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 		local __gLCell
 		__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
 		gradInput:add(__gInput)
-		self._gLOutput:add(__gLOutput)
-		self._gLCell:add(__gLCell)
 
 		if not _also_first then
+			if not self.rememberState or self.firstSequence then
+				self._gLOutput:add(__gLOutput)
+				self._gLCell:add(__gLCell)
+			end
 			-- move self.cell(current cell) ahead
 			self.cell = _cPrevCell
 		else
@@ -713,8 +836,11 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 	-- backward the gate
 	__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
 	_gInput:add(__gInput)
-	self._gLOutput:add(__gLOutput)
-	self._gLCell:add(__gLCell)
+
+	if not self.rememberState or self.firstSequence then
+		self._gLOutput:add(__gLOutput)
+		self._gLCell:add(__gLCell)
+	end
 
 	gradInput[1] = _gInput
 
@@ -738,6 +864,245 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 
 end
 
+-- backward for tensor input and gradOutput sequence
+function aLSTM:_tseq_backward(input, gradOutput, scale)
+
+	-- if need to mask zero, then mask
+	if self.maskzero then
+		self:_tseq_makeZero(input, gradOutput)
+	end
+
+	local iSize = input:size()
+	local oSize = gradOutput:size()
+
+	local _length = iSize[1]
+
+	self.gradInput:resize(iSize)
+
+	-- remove the last output, because it was never used
+	local _lastOutput = self._output[_length]
+	-- get current cell,
+	-- it will be used will backward output gate
+	self.cell = self._cell[_length]--c[t]
+
+	-- remember the end of sequence for next input use
+	if self.rememberState then
+		self.lastCell = self.cell
+		self.lastOutput = _lastOutput
+	end
+
+	-- grad to input and cell
+	local _gInput, _gCell
+
+	-- pre claim the local variable, they were discribed where they were used.
+	local _cGradOut, _cInput, _cPrevOutput, _cPrevCell, _cotanh, _coifgate, _coogate, _coz, _coigate, _cofgate, _gg
+	local __gLCell
+
+	if _length > 1 then
+
+		--backward the last
+
+		-- prepare data for future use
+		_cGradOut = gradOutput[_length]-- current gradOutput
+		_cInput = _input[_length]-- current input
+		_cPrevOutput = self._output[_length - 1]-- previous output, h[t-1]
+		_cPrevCell = self._cell[_length - 1]-- previous cell, c[t-1]
+
+		_cotanh = self.otanh[_length]-- output of the tanh after cell for the final output, tanh[t]
+		_coifgate = self.oifgate[_length]-- output of the input and forget gate, if[t], input and forget
+		_coogate = self.oogate[_length]-- output of the output gate, o[t]
+		_coz = self.ohid[_length]-- hidden unit produced by input, z[t]
+
+		-- asign output of input gate and output gate
+		_coigate = _coifgate:narrow(self.narrowDim, 1, self.outputSize)-- i[t]
+		_cofgate = _coifgate:narrow(self.narrowDim, self.fgstartid, self.outputSize)--f[t] 
+
+		-- backward
+
+		-- grad to output gate
+		_gg = torch.cmul(_cGradOut, _cotanh)
+
+		-- backward output gate
+
+		_gInput, self._gLOutput, _gCell = unpack(self.ogate:backward({_cInput, _cPrevOutput, self.cell}, _gg, scale))
+
+		-- backward from the output tanh to cell
+		_gCell:add(self.tanh:updateGradInput(self.cell, torch.cmul(_cGradOut, _coogate)))
+
+		-- backward hidden
+		local __gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
+		_gInput:add(__gInput)
+		self._gLOutput:add(__gLOutput)
+
+		-- compute the gradOutput of the Prev cell
+		self._gLCell = torch.cmul(_gCell, _cofgate)
+
+		-- backward ifgate(input and forget gate)
+		-- compute gradOutput
+		_gg:resize(self.batchsize, 2 * self.outputSize)
+		_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _coz))
+		_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
+		-- backward the gate
+
+		__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
+		_gInput:add(__gInput)
+		self._gLOutput:add(__gLOutput)
+		self._gLCell:add(__gLCell)
+
+		-- move self.cell(current cell) ahead,
+		-- prepare to backward on time step before
+		self.cell = _cPrevCell
+
+		self.gradInput[_length]:copy(_gInput)
+
+	else
+
+		-- prepare self._gLOutput and self.__gLCell for it will be used by the first step
+		-- zero here result extra resource waste,
+		-- but it is ok if it was not a often case
+		self._gLOutput = gradOutput[1]:clone():zero()
+		self._gLCell = self._gLOutput:clone()
+
+	end
+
+	-- backward from end to 2
+	for _t = _length - 1, 2, -1 do
+
+		-- prepare data for future use
+		_cGradOut = gradOutput[_t]-- current gradOutput
+
+		-- add gradOutput from the sequence behind
+		_cGradOut:add(self._gLOutput)
+
+		_cInput = _input[_t]-- current input
+		_cPrevOutput = self._output[_t - 1]-- previous output
+		_cPrevCell = self._cell[_t - 1]-- previous cell
+
+		_cotanh = self.otanh[_t]-- output of the tanh after cell for the final output
+		_coifgate = self.oifgate[_t]-- output of the input and forget gate
+		_coogate = self.oogate[_t]-- output of the output gate
+		_coz = self.ohid[_t]-- hidden unit produced by input
+
+		-- asign output of input gate and output gate
+		_coigate = _coifgate:narrow(self.narrowDim, 1, self.outputSize) 
+		_cofgate = _coifgate:narrow(self.narrowDim, self.fgstartid, self.outputSize) 
+
+		-- backward
+
+		-- grad to output gate
+		_gg = torch.cmul(_cGradOut, _cotanh)
+
+		-- backward output gate
+		_gInput, self._gLOutput, _gCell = unpack(self.ogate:backward({_cInput, _cPrevOutput, self.cell}, _gg, scale))
+
+		-- backward from the output tanh to cell
+		_gCell:add(self.tanh:updateGradInput(self.cell, torch.cmul(_cGradOut, _coogate)))
+
+		-- add gradOutput from the sequence behind
+		_gCell:add(self._gLCell)
+
+		-- backward hidden
+		local __gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
+		_gInput:add(__gInput)
+		self._gLOutput:add(__gLOutput)
+
+		-- compute the gradOutput of the Prev cell
+		self._gLCell = torch.cmul(_gCell, _cofgate)
+
+		-- backward ifgate(input and forget gate)
+		-- compute gradOutput
+		_gg:resize(self.batchsize, 2 * self.outputSize)
+		_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _coz))
+		_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
+		-- backward the gate
+		__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
+		_gInput:add(__gInput)
+		self._gLOutput:add(__gLOutput)
+		self._gLCell:add(__gLCell)
+
+		-- move self.cell(current cell) ahead
+		self.cell = _cPrevCell
+
+		self.gradInput[_t]:copy(_gInput)
+
+	end
+
+	-- backward for the first time step
+
+	-- prepare data for future use
+	_cGradOut = gradOutput[1]-- current gradOutput
+
+	-- add gradOutput from the sequence behind
+	_cGradOut:add(self._gLOutput)
+
+	_cInput = _input[1]-- current input
+	_cPrevOutput = self.output0-- previous output
+	_cPrevCell = self.cell0-- previous cell
+
+	_cotanh = self.otanh[1]-- output of the tanh after cell for the final output
+
+	_coifgate = self.oifgate[1]-- output of the input and forget gate
+	_coogate = self.oogate[1]-- output of the output gate
+	_coz = self.ohid[1]-- hidden unit produced by input
+
+	-- asign output of input gate and output gate
+	_coigate = _coifgate:narrow(self.narrowDim, 1, self.outputSize) 
+	_cofgate = _coifgate:narrow(self.narrowDim, self.fgstartid, self.outputSize)
+
+	-- backward
+
+	-- grad to output gate
+	_gg = torch.cmul(_cGradOut, _cotanh)
+	-- backward output gate
+	_gInput, self._gLOutput, _gCell = unpack(self.ogate:backward({_cInput, _cPrevOutput, self.cell}, _gg, scale))
+
+	-- backward from the output tanh to cell
+	_gCell:add(self.tanh:updateGradInput(self.cell, torch.cmul(_cGradOut, _coogate)))
+
+	-- add gradOutput from the sequence behind
+	_gCell:add(self._gLCell)
+
+	-- backward hidden
+	__gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
+	_gInput:add(__gInput)
+	self._gLOutput:add(__gLOutput)
+
+	-- compute the gradOutput of the Prev cell
+	self._gLCell = torch.cmul(_gCell, _cofgate)
+
+	-- backward ifgate(input and forget gate)
+	-- compute gradOutput
+	_gg:resize(self.batchsize, 2 * self.outputSize)
+	_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _coz))
+	_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
+	-- backward the gate
+	__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
+	_gInput:add(__gInput)
+
+	if not self.rememberState or self.firstSequence then
+		self._gLOutput:add(__gLOutput)
+		self._gLCell:add(__gLCell)
+	end
+
+	self.gradInput[1]:copy(_gInput)
+
+	-- accGradParameters for self
+	if self.rememberState then
+		if self.firstSequence then
+			-- accGradParameters for self
+			self:_accGradParameters(scale)
+			self.firstSequence = false
+		end
+	else
+		self:_accGradParameters(scale)
+	end
+
+	return self.gradInput
+
+end
+
+-- updateGradInput for sequence,
+-- in fact, it call backward
 function aLSTM:_seq_updateGradInput(input, gradOutput)
 
 	return self:backward(input, gradOutput)
@@ -795,8 +1160,39 @@ function aLSTM:_accGradParameters(scale)
 
 end
 
+-- init storage for tensor
+function aLSTM:_tensor_forget(tsr)
+
+	tsr = tsr or torch.Tensor()
+
+	-- cell sequence
+	self._cell = tsr.new()
+	-- last cell
+	self.cell = nil
+	-- output sequence
+	self._output = tsr.new()
+	-- last output
+	self.output = nil
+	-- gradInput sequence
+	self.gradInput = tsr.new()
+
+	-- after tanh value for the final output from cell
+	self.otanh = tsr.new()
+	-- output of the input and forget gate
+	self.oifgate = tsr.new()
+	-- output of the output gate
+	self.oogate = tsr.new()
+	-- output of z(hidden)
+	self.ohid = tsr.new()
+
+	-- grad from the sequence after
+	self._gLCell = nil
+	self._gLOutput = nil
+
+end
+
 -- clear the storage
-function aLSTM:_forget()
+function aLSTM:_table_forget()
 
 	-- cell sequence
 	self._cell = {}
@@ -824,6 +1220,7 @@ function aLSTM:_forget()
 
 end
 
+-- forget the history
 function aLSTM:forget()
 
 	self:_forget()
@@ -983,12 +1380,12 @@ function aLSTM:_step_makeZero(input, gradOutput)
 		
 		-- get a zero unit
 		local _stdZero = input.new()
-		_stdZero:resizeAs(input:narrow(1,1,1)):zero()
+		_stdZero:resizeAs(input[1]):zero()
 		-- look at each unit
 		for _t = 1, self.batchsize do
-			if input:narrow(1,_t,1):equal(_stdZero) then
+			if input[_t]:equal(_stdZero) then
 				-- if it was zero, then zero the gradOutput
-				gradOutput:narrow(1,_t,1):zero()
+				gradOutput[_t]:zero()
 			end
 		end
 	else
@@ -1014,7 +1411,7 @@ function aLSTM:_seq_makeZero(input, gradOutput)
 	-- if batch input
 
 		-- get a zero unit
-		_stdZero:resizeAs(_fi:narrow(1,1,1)):zero()
+		_stdZero:resizeAs(_fi[1]):zero()
 
 		-- walk the whole sequence
 		for _t,v in ipairs(input) do
@@ -1022,9 +1419,9 @@ function aLSTM:_seq_makeZero(input, gradOutput)
 			-- look at each unit
 			local _grad = gradOutput[_t]
 			for __t = 1, self.batchsize do
-				if v:narrow(1,__t,1):equal(_stdZero) then
+				if v[__t]:equal(_stdZero) then
 					-- if it was zero, then zero the gradOutput
-					_grad:narrow(1,__t,1):zero()
+					_grad[__t]:zero()
 				end
 			end
 		end
@@ -1045,6 +1442,22 @@ function aLSTM:_seq_makeZero(input, gradOutput)
 
 	end
 
+end
+
+-- mask zero for a tensor sequence
+function aLSTM:_tseq_makeZero(input, gradOutput)
+	local _fi = input[1][1]
+	local iSize = input:size()
+	local _stdZero = _fi.new()
+	_stdZero:resizeAs(_fi):zero()
+	for _i = 1, iSize[1] do
+		local _ti = input[_i]
+		for _j= 1, iSize[2] do
+			if _ti[_j]:equal(_stdZero) then
+				gradOutput[_i][_j]:zero()
+			end
+		end
+	end
 end
 
 -- copy a table
