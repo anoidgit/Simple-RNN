@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.8
+	Version 0.0.9
 
 ]]
 
@@ -840,19 +840,28 @@ end
 
 -- evaluate
 function aLSTM:evaluate()
+
 	self.train = false
-	self:_forget()
+
 	for _, module in ipairs(self.modules) do
 		module:evaluate()
 	end
+
+	self:forget()
+
 end
 
 -- train
 function aLSTM:training()
+
 	self.train = true
+
 	for _, module in ipairs(self.modules) do
 		module:training()
 	end
+
+	self:forget()
+
 end
 
 -- reset the module
