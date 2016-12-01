@@ -159,7 +159,7 @@ function aLSTM:_tseq_updateOutput(input)
 	local iSize = input:size()
 	local oSize = iSize:clone()
 	oSize[-1] = self.outputSize
-	self._output:resize(oSize)
+	self.output:resize(oSize)
 
 	if self.train then
 
@@ -238,12 +238,11 @@ function aLSTM:_tseq_updateOutput(input)
 		local _otanh = self.tanh:forward(self.cell)
 		_output = torch.cmul(_ogo, _otanh)
 
-		self._output[_t]:copy(_output)
+		self.output[_t]:copy(_output)
 
 		-- if training, remember what should remember
 		if self.train then
 			self._cell[_t]:copy(self.cell)--c[t]
-			self._output[_t]:copy(_output)--h[t]
 			self.otanh[_t]:copy(_otanh)--tanh[t]
 			self.oifgate[_t]:copy(_ifgo)--if[t], input and forget
 			self.ohid[_t]:copy(_zo)--z[t]
@@ -251,10 +250,6 @@ function aLSTM:_tseq_updateOutput(input)
 		end
 
 	end
-
-	-- this have conflict with _step_updateOutput,
-	-- but anyhow do not use them at the same time
-	self.output = self._output
 
 	return self.output
 
@@ -880,15 +875,16 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 	self.gradInput:resize(iSize)
 
 	-- remove the last output, because it was never used
-	local _lastOutput = self._output[_length]
+	local _lastOutput = self.output[_length]
 	-- get current cell,
 	-- it will be used will backward output gate
 	self.cell = self._cell[_length]--c[t]
 
 	-- remember the end of sequence for next input use
 	if self.rememberState then
-		self.lastCell = self.cell
-		self.lastOutput = _lastOutput
+		-- clone it, for fear that self.lastCell and self.lastOutput marks the whole memory of self.cell and self.output as used
+		self.lastCell = self.cell:clone()
+		self.lastOutput = _lastOutput:clone()
 	end
 
 	-- grad to input and cell
@@ -905,7 +901,7 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 		-- prepare data for future use
 		_cGradOut = gradOutput[_length]-- current gradOutput
 		_cInput = _input[_length]-- current input
-		_cPrevOutput = self._output[_length - 1]-- previous output, h[t-1]
+		_cPrevOutput = self.output[_length - 1]-- previous output, h[t-1]
 		_cPrevCell = self._cell[_length - 1]-- previous cell, c[t-1]
 
 		_cotanh = self.otanh[_length]-- output of the tanh after cell for the final output, tanh[t]
@@ -975,7 +971,7 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 		_cGradOut:add(self._gLOutput)
 
 		_cInput = _input[_t]-- current input
-		_cPrevOutput = self._output[_t - 1]-- previous output
+		_cPrevOutput = self.output[_t - 1]-- previous output
 		_cPrevCell = self._cell[_t - 1]-- previous cell
 
 		_cotanh = self.otanh[_t]-- output of the tanh after cell for the final output
@@ -1166,24 +1162,47 @@ function aLSTM:_tensor_forget(tsr)
 	tsr = tsr or torch.Tensor()
 
 	-- cell sequence
-	self._cell = tsr.new()
+	if not self._cell then
+		self._cell = tsr.new()
+	else
+		self._cell:resize(0)
 	-- last cell
 	self.cell = nil
 	-- output sequence
-	self._output = tsr.new()
+	if not self.output then
+		self.output = tsr.new()
+	else
+		self.output:resize(0)
 	-- last output
-	self.output = nil
+	-- here switch the usage of self.output and self._output for fit the standard of nn.Module
+	-- just point self._output to keep aLSTM standard
+	self._output = self.output
 	-- gradInput sequence
-	self.gradInput = tsr.new()
+	if not self.gradInput then
+		self.gradInput = tsr.new()
+	else
+		self.gradInput:resize(0)
 
 	-- after tanh value for the final output from cell
-	self.otanh = tsr.new()
+	if not self.otanh then
+		self.otanh = tsr.new()
+	else
+		self.otanh:resize(0)
 	-- output of the input and forget gate
-	self.oifgate = tsr.new()
+	if not self.oifgate then
+		self.oifgate = tsr.new()
+	else
+		self.oifgate:resize(0)
 	-- output of the output gate
-	self.oogate = tsr.new()
+	if not self.oogate then
+		self.oogate = tsr.new()
+	else
+		self.oogate:resize(0)
 	-- output of z(hidden)
-	self.ohid = tsr.new()
+	if not self.ohid then
+		self.ohid = tsr.new()
+	else
+		self.ohid:resize(0)
 
 	-- grad from the sequence after
 	self._gLCell = nil
