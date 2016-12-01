@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.9
+	Version 0.0.10
 
 ]]
 
@@ -82,8 +82,10 @@ function aLSTM:_step_updateOutput(input)
 					self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
 				end
 			else
-				self.cell0 = torch.repeatTensor(self.sbm.bias:narrow(1, 1, self.outputSize), self.batchsize, 1)
-				self.output0 = torch.repeatTensor(self.sbm.bias:narrow(1, self.fgstartid, self.outputSize), self.batchsize, 1)
+				self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
+				self.cell0 = self.cell0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
+				self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
+				self.output0 = self.output0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
 			end
 
 			-- narrow dimension
@@ -163,8 +165,10 @@ function aLSTM:_seq_updateOutput(input)
 				self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
 			end
 		else
-			self.cell0 = torch.repeatTensor(self.sbm.bias:narrow(1, 1, self.outputSize), self.batchsize, 1)
-			self.output0 = torch.repeatTensor(self.sbm.bias:narrow(1, self.fgstartid, self.outputSize), self.batchsize, 1)
+			self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
+			self.cell0 = self.cell0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
+			self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
+			self.output0 = self.output0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
 		end
 
 		-- narrow dimension
