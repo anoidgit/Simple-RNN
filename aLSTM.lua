@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.5
+	Version 0.0.6
 
 ]]
 
@@ -370,10 +370,14 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			self._gLOutput:add(__gLOutput)
 			self._gLCell:add(__gLCell)
 
-			if self.firstSequence then
-				-- accGradParameters for self
+			if self.rememberState then
+				if self.firstSequence then
+					-- accGradParameters for self
+					self:_accGradParameters(scale)
+					self.firstSequence = false
+				end
+			else
 				self:_accGradParameters(scale)
-				self.firstSequence = false
 			end
 
 			-- prepare for next forward sequence, clear cache
@@ -456,9 +460,14 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			-- move self.cell(current cell) ahead
 			self.cell = _cPrevCell
 		else
-			if self.firstSequence then
+			if self.rememberState then
+				if self.firstSequence then
+					-- accGradParameters for self
+					self:_accGradParameters(scale)
+					self.firstSequence = false
+				end
+			else
 				self:_accGradParameters(scale)
-				self.firstSequence = false
 			end
 			self:_forget()
 		end
@@ -696,9 +705,14 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 	gradInput[1] = _gInput
 
 	-- accGradParameters for self
-	if self.firstSequence then
+	if self.rememberState then
+		if self.firstSequence then
+			-- accGradParameters for self
+			self:_accGradParameters(scale)
+			self.firstSequence = false
+		end
+	else
 		self:_accGradParameters(scale)
-		self.firstSequence = false
 	end
 
 	-- prepare for next forward sequence, clear cache
@@ -719,9 +733,14 @@ end
 -- modules in aLSTM.modules were done while backward
 function aLSTM:accGradParameters(input, gradOutput, scale)
 
-	if self.firstSequence then
+	if self.rememberState then
+		if self.firstSequence then
+			-- accGradParameters for self
+			self:_accGradParameters(scale)
+			self.firstSequence = false
+		end
+	else
 		self:_accGradParameters(scale)
-		self.firstSequence = false
 	end
 
 end
@@ -840,7 +859,7 @@ function aLSTM:reset()
 
 	-- module used to compute the forward and backward of tanh
 	-- It seems does not need to be put in self.modules
-	self.tanh = nn.aTanh()
+	self.tanh = nn.aTanh(true)
 
 	--[[ put the modules in self.modules,
 	so the default method could be done correctly]]
@@ -860,8 +879,9 @@ function aLSTM:remember(mode)
 		self.rememberState = true
 	else
 		self.rememberState = nil
-		self:forget()
 	end
+
+	self:forget()
 
 end
 
@@ -871,7 +891,7 @@ function aLSTM:buildIFModule()
 	local _ifm = nn.aSequential()
 		:add(nn.aJoinTable(self.narrowDim,self.narrowDim))
 		:add(nn.aLinear(self.inputSize + self.outputSize * 2, self.outputSize * 2))
-		:add(nn.aSigmoid())
+		:add(nn.aSigmoid(true))
 
 	return _ifm
 
@@ -883,7 +903,7 @@ function aLSTM:buildOGModule()
 	local _ogm = nn.aSequential()
 		:add(nn.aJoinTable(self.narrowDim,self.narrowDim))
 		:add(nn.aLinear(self.inputSize + self.outputSize * 2, self.outputSize))
-		:add(nn.aSigmoid())
+		:add(nn.aSigmoid(true))
 
 	return _ogm
 
@@ -895,7 +915,7 @@ function aLSTM:buildUpdateModule()
 	local _um = nn.aSequential()
 		:add(nn.aJoinTable(self.narrowDim,self.narrowDim))
 		:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize))
-		:add(nn.aTanh())
+		:add(nn.aTanh(tanh))
 
 	return _um
 
@@ -922,9 +942,12 @@ function aLSTM:prepare()
 
 	nn.aJoinTable = nn.JoinTable
 	nn.aLinear = nn.Linear
-	nn.aTanh = nn.Tanh
-	--require "aTanh"
-	nn.aSigmoid = nn.Sigmoid
+	require "aSeqTanh"
+	nn.aTanh = nn.aSeqTanh
+	--nn.aTanh = nn.Tanh
+	require "aSeqSigmoid"
+	nn.aSigmoid = nn.aSeqSigmoid
+	--nn.aSigmoid = nn.Sigmoid
 	nn.aSequential = nn.Sequential
 
 end
