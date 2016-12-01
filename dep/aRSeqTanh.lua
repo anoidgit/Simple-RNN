@@ -9,20 +9,26 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.3
+	Version 0.0.4
 
 ]]
 
-local aRSeqTanh = torch.class('nn.aRSeqTanh', 'nn.Module')
+local aSeqTanh = torch.class('nn.aSeqTanh', 'nn.Module')
 
-function aRSeqTanh:__init()
+function aSeqTanh:__init(reverseOrder)
+
+	if reverseOrder then
+		self.rindex = nil
+	else
+		self.rindex = 1
+	end
 
 	self.backward = self.updateGradInput
 	self:forget()
 
 end
 
-function aRSeqTanh:updateOutput(input)
+function aSeqTanh:updateOutput(input)
 
 	local output = torch.tanh(input)
 	table.insert(self._output,output)
@@ -32,9 +38,9 @@ function aRSeqTanh:updateOutput(input)
 
 end
 
-function aRSeqTanh:updateGradInput(input, gradOutput)
+function aSeqTanh:updateGradInput(input, gradOutput)
 
-	local output = table.remove(self._output)
+	local output = table.remove(self._output, self.rindex)
 
 	local gradInput = input.new()
 	gradInput:resizeAs(input):fill(1)
@@ -48,6 +54,8 @@ end
 
 -- Warning: This method is dangerous,
 -- unless you know what you are doing.
-function aRSeqTanh:forget()
+function aSeqTanh:forget()
+
 	self._output = {}
+
 end
