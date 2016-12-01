@@ -26,12 +26,7 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember)
 	self.maskzero = maskZero
 
 	-- set wether remember the cell and output between sequence
-	-- unless you really need, this was not advised
-	-- if you use this,
-	-- you need to have the same batchsize until you call forget,
-	-- for the last time step,
-	-- at least it must be little then the previous step
-	self.rememberState = remember
+	self.remember = remember
 
 	-- prepare should be only debug use consider of efficient
 	self:prepare()
@@ -44,7 +39,10 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember)
 	-- because it is outputSize + 1, take care of this
 	self.fgstartid = outputSize + 1
 
+	-- prepare variables to build modules
 	self.inputSize, self.outputSize = inputSize, outputSize
+
+	self.narrowDim = 1
 
 	self:reset()
 
@@ -69,28 +67,14 @@ function aLSTM:_step_updateOutput(input)
 		local _nIdim = input:nDimension()
 		if _nIdim>1 then
 			self.batchsize = input:size(1)
-
-			if self.rememberState and self.lastCell then
-				self.cell0 = self.lastCell:narrow(1, 1, self.batchsize)
-				self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
-			else
-				self.cell0 = torch.repeatTensor(self.sbm.bias:narrow(1, 1, self.outputSize), self.batchsize, 1)
-				self.output0 = torch.repeatTensor(self.sbm.bias:narrow(1, self.fgstartid, self.outputSize), self.batchsize, 1)
-			end
-
+			self.cell0 = torch.repeatTensor(self.sbm.bias:narrow(1, 1, self.outputSize), self.batchsize, 1)
+			self.output0 = torch.repeatTensor(self.sbm.bias:narrow(1, self.fgstartid, self.outputSize), self.batchsize, 1)
 			-- narrow dimension
 			self.narrowDim = _nIdim
 		else
 			self.batchsize = nil
-
-			if self.rememberState and self.lastCell then
-				self.cell0 = self.lastCell
-				self.output0 = self.lastOutput
-			else
-				self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
-				self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
-			end
-
+			self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
+			self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
 			-- narrow dimension
 			self.narrowDim = 1
 		end
@@ -144,29 +128,14 @@ function aLSTM:_seq_updateOutput(input)
 	local _nIdim = input[1]:nDimension()
 	if _nIdim>1 then
 		self.batchsize = input[1]:size(1)
-
-		-- if need start from last state of the previous sequence
-		if self.rememberState and self.lastCell then
-			self.cell0 = self.lastCell:narrow(1, 1, self.batchsize)
-			self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
-		else
-			self.cell0 = torch.repeatTensor(self.sbm.bias:narrow(1, 1, self.outputSize), self.batchsize, 1)
-			self.output0 = torch.repeatTensor(self.sbm.bias:narrow(1, self.fgstartid, self.outputSize), self.batchsize, 1)
-		end
-
+		self.cell0 = torch.repeatTensor(self.sbm.bias:narrow(1, 1, self.outputSize), self.batchsize, 1)
+		self.output0 = torch.repeatTensor(self.sbm.bias:narrow(1, self.fgstartid, self.outputSize), self.batchsize, 1)
 		-- narrow dimension
 		self.narrowDim = _nIdim
 	else
 		self.batchsize = nil
-
-		if self.rememberState and self.lastCell then
-			self.cell0 = self.lastCell
-			self.output0 = self.lastOutput
-		else
-			self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
-			self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
-		end
-
+		self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
+		self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
 		-- narrow dimension
 		self.narrowDim = 1
 	end
@@ -367,14 +336,11 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			self._gLOutput:add(__gLOutput)
 			self._gLCell:add(__gLCell)
 
-			if self.firstSequence then
-				-- accGradParameters for self
-				self:_accGradParameters(scale)
-				self.firstSequence = false
-			end
+			-- accGradParameters for self
+			self:_accGradParameters(scale)
 
 			-- prepare for next forward sequence, clear cache
-			self:_forget()
+			self:forget()
 
 		end
 
@@ -382,37 +348,18 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 
 		-- for the last step
 
-		-- whether the last step also was the first step
-		local _also_first = false
-		if #self._output ==1 then
-			_also_first = true
-		end
-
 		-- remove the last output
-		local _lastOutput = table.remove(self._output)
+		table.remove(self._output)
 		-- get current cell,
 		-- it will be used will backward output gate
 		self.cell = table.remove(self._cell)
-
-		-- if need to remember to use for the next sequence
-		if self.rememberState then
-			self.lastCell = self.cell
-			self.lastOutput = _lastOutput
-		end
 
 		--backward the last
 
 		-- prepare data for future use
 		local _cInput = table.remove(input)-- current input
-		local _cPrevOutput,_cPrevCell
-
-		if _also_first then
-			_cPrevOutput = self.output0
-			_cPrevCell = self.cell0
-		else
-			_cPrevOutput = table.remove(self._output)-- previous output
-			_cPrevCell = table.remove(self._cell)-- previous cell
-		end
+		local _cPrevOutput = table.remove(self._output)-- previous output
+		local _cPrevCell = table.remove(self._cell)-- previous cell
 
 		local _cotanh = table.remove(self.otanh)-- output of the tanh after cell for the final output
 		local _cofgate = table.remove(self.ofgate)-- output of the forget gate
@@ -449,16 +396,8 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 		self._gLOutput:add(__gLOutput)
 		self._gLCell:add(__gLCell)
 
-		if not _also_first then
-			-- move self.cell(current cell) ahead
-			self.cell = _cPrevCell
-		else
-			if self.firstSequence then
-				self:_accGradParameters(scale)
-				self.firstSequence = false
-			end
-			self:_forget()
-		end
+		-- move self.cell(current cell) ahead
+		self.cell = _cPrevCell
 
 	end
 
@@ -489,16 +428,10 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 	local gradInput = {}
 
 	-- remove the last output, because it was never used
-	local _lastOutput = table.remove(self._output)
+	table.remove(self._output)
 	-- get current cell,
 	-- it will be used will backward output gate
 	self.cell = table.remove(self._cell)--c[t]
-
-	-- remember the end of sequence for next input use
-	if self.rememberState then
-		self.lastCell = self.cell
-		self.lastOutput = _lastOutput
-	end
 
 	-- grad to input and cell
 	local _gInput, _gCell
@@ -693,13 +626,10 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 	gradInput[1] = _gInput
 
 	-- accGradParameters for self
-	if self.firstSequence then
-		self:_accGradParameters(scale)
-		self.firstSequence = false
-	end
+	self:_accGradParameters(scale)
 
 	-- prepare for next forward sequence, clear cache
-	self:_forget()
+	self:forget()
 
 	self.gradInput = gradInput
 
@@ -716,10 +646,7 @@ end
 -- modules in aLSTM.modules were done while backward
 function aLSTM:accGradParameters(input, gradOutput, scale)
 
-	if self.firstSequence then
-		self:_accGradParameters(scale)
-		self.firstSequence = false
-	end
+	self:_accGradParameters(scale)
 
 end
 
@@ -756,11 +683,10 @@ function aLSTM:_accGradParameters(scale)
 	self.sbm.gradBias:narrow(1,1,self.outputSize):add(scale, self._gLCell)
 	self.sbm.gradBias:narrow(1,self.fgstartid,self.outputSize):add(scale, self._gLOutput)
 
-
 end
 
 -- clear the storage
-function aLSTM:_forget()
+function aLSTM:forget()
 
 	-- cell sequence
 	self._cell = {}
@@ -788,19 +714,6 @@ function aLSTM:_forget()
 
 end
 
-function aLSTM:forget()
-
-	self:_forget()
-
-	-- clear last cell and output
-	self.lastCell = nil
-	self.lastOutput = nil
-
-	-- set first sequence(will update bias)
-	self.firstSequence = true
-
-end
-
 -- define type
 function aLSTM:type(type, ...)
 	return parent.type(self, type, ...)
@@ -809,7 +722,7 @@ end
 -- evaluate
 function aLSTM:evaluate()
 	self.train = false
-	self:_forget()
+	self:forget()
 	for _, module in ipairs(self.modules) do
 		module:evaluate()
 	end
@@ -844,21 +757,6 @@ function aLSTM:reset()
 	self.modules = {self.ifgate, self.zmod, self.ogate, self.sbm}
 
 	self:forget()
-
-end
-
--- remember last state or not
-function aLSTM:remember(mode)
-
-	-- set default to both
-	local _mode = mode or "both"
-
-	if _mode == "both" or _mode == true then
-		self.rememberState = true
-	else
-		self.rememberState = nil
-		self:forget()
-	end
 
 end
 
