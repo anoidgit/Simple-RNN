@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.12
+	Version 0.0.15
 
 ]]
 
@@ -157,8 +157,8 @@ function aLSTM:_tseq_updateOutput(input)
 
 	-- get input and output size
 	local iSize = input:size()
-	local oSize = iSize:clone()
-	oSize[-1] = self.outputSize
+	local oSize = input:size()
+	oSize[3] = self.outputSize
 	self.output:resize(oSize)
 
 	if self.train then
@@ -167,8 +167,9 @@ function aLSTM:_tseq_updateOutput(input)
 		self.gradInput:resize(iSize)
 		self.otanh:resize(oSize)
 		self.oogate:resize(oSize)
-		local dOSize = oSize:clone()
-		dOSize[-1] = self.outputSize * 2
+		self.ohid:resize(oSize)
+		local dOSize = input:size()
+		dOSize[3] = self.outputSize * 2
 		self.oifgate:resize(dOSize)
 
 	end
@@ -215,7 +216,8 @@ function aLSTM:_tseq_updateOutput(input)
 	local _output = self.output0
 
 	-- forward the whole sequence
-	for _t,iv in ipairs(input) do
+	for _t = 1, iSize[1] do
+		local iv = input[_t]
 		-- compute input gate and forget gate
 		local _ifgo = self.ifgate:forward({iv, _output, self.cell})
 
@@ -900,7 +902,7 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 
 		-- prepare data for future use
 		_cGradOut = gradOutput[_length]-- current gradOutput
-		_cInput = _input[_length]-- current input
+		_cInput = input[_length]-- current input
 		_cPrevOutput = self.output[_length - 1]-- previous output, h[t-1]
 		_cPrevCell = self._cell[_length - 1]-- previous cell, c[t-1]
 
@@ -970,7 +972,7 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 		-- add gradOutput from the sequence behind
 		_cGradOut:add(self._gLOutput)
 
-		_cInput = _input[_t]-- current input
+		_cInput = input[_t]-- current input
 		_cPrevOutput = self.output[_t - 1]-- previous output
 		_cPrevCell = self._cell[_t - 1]-- previous cell
 
@@ -1031,7 +1033,7 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 	-- add gradOutput from the sequence behind
 	_cGradOut:add(self._gLOutput)
 
-	_cInput = _input[1]-- current input
+	_cInput = input[1]-- current input
 	_cPrevOutput = self.output0-- previous output
 	_cPrevCell = self.cell0-- previous cell
 
@@ -1092,6 +1094,10 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 	else
 		self:_accGradParameters(scale)
 	end
+
+	local gradInput = self.gradInput:clone()
+	self:_forget()-- this forget will clear self.gradInput, so copy it at first
+	self.gradInput:resizeAs(gradInput):copy(gradInput)
 
 	return self.gradInput
 
@@ -1166,6 +1172,7 @@ function aLSTM:_tensor_forget(tsr)
 		self._cell = tsr.new()
 	else
 		self._cell:resize(0)
+	end
 	-- last cell
 	self.cell = nil
 	-- output sequence
@@ -1173,6 +1180,7 @@ function aLSTM:_tensor_forget(tsr)
 		self.output = tsr.new()
 	else
 		self.output:resize(0)
+	end
 	-- last output
 	-- here switch the usage of self.output and self._output for fit the standard of nn.Module
 	-- just point self._output to keep aLSTM standard
@@ -1182,27 +1190,32 @@ function aLSTM:_tensor_forget(tsr)
 		self.gradInput = tsr.new()
 	else
 		self.gradInput:resize(0)
+	end
 
 	-- after tanh value for the final output from cell
 	if not self.otanh then
 		self.otanh = tsr.new()
 	else
 		self.otanh:resize(0)
+	end
 	-- output of the input and forget gate
 	if not self.oifgate then
 		self.oifgate = tsr.new()
 	else
 		self.oifgate:resize(0)
+	end
 	-- output of the output gate
 	if not self.oogate then
 		self.oogate = tsr.new()
 	else
 		self.oogate:resize(0)
+	end
 	-- output of z(hidden)
 	if not self.ohid then
 		self.ohid = tsr.new()
 	else
 		self.ohid:resize(0)
+	end
 
 	-- grad from the sequence after
 	self._gLCell = nil
@@ -1255,7 +1268,9 @@ end
 
 -- define type
 function aLSTM:type(type, ...)
+
 	return parent.type(self, type, ...)
+
 end
 
 -- evaluate
@@ -1465,6 +1480,7 @@ end
 
 -- mask zero for a tensor sequence
 function aLSTM:_tseq_makeZero(input, gradOutput)
+
 	local _fi = input[1][1]
 	local iSize = input:size()
 	local _stdZero = _fi.new()
@@ -1477,12 +1493,14 @@ function aLSTM:_tseq_makeZero(input, gradOutput)
 			end
 		end
 	end
+
 end
 
 -- copy a table
 function aLSTM:_cloneTable(tbsrc)
 
 	local tbrs = {}
+
 	for k,v in ipairs(tbsrc) do
 		tbrs[k] = v
 	end
