@@ -982,7 +982,8 @@ function aLSTM:_step_makeZero(input, gradOutput)
 		-- if batch input
 		
 		-- get a zero unit
-		local _stdZero = input:narrow(1,1,1):clone():zero()
+		local _stdZero = input.new()
+		_stdZero:resizeAs(input:narrow(1,1,1)):zero()
 		-- look at each unit
 		for _t = 1, self.batchsize do
 			if input:narrow(1,_t,1):equal(_stdZero) then
@@ -993,7 +994,8 @@ function aLSTM:_step_makeZero(input, gradOutput)
 	else
 		-- if not batch
 
-		local _stdZero = input:clone():zero()
+		local _stdZero = input.new()
+		_stdZero:resizeAs(input):zero()
 		if input:equal(_stdZero) then
 			gradOutput:zero()
 		end
@@ -1004,10 +1006,43 @@ end
 -- mask zero for a sequence
 function aLSTM:_seq_makeZero(input, gradOutput)
 
-	-- walk the whole sequence
-	for _t,v in ipairs(input) do
-		-- make zero for each step
-		self:_step_makeZero(v,gradOutput[_t])
+	-- get a storage
+	local _fi = input[1]
+	local _stdZero = _fi.new()
+
+	if self.batchsize then
+	-- if batch input
+
+		-- get a zero unit
+		_stdZero:resizeAs(_fi:narrow(1,1,1)):zero()
+
+		-- walk the whole sequence
+		for _t,v in ipairs(input) do
+			-- make zero for each step
+			-- look at each unit
+			local _grad = gradOutput[_t]
+			for __t = 1, self.batchsize do
+				if v:narrow(1,__t,1):equal(_stdZero) then
+					-- if it was zero, then zero the gradOutput
+					_grad:narrow(1,__t,1):zero()
+				end
+			end
+		end
+
+	else
+
+		_stdZero:resizeAs(_fi):zero()
+
+		-- walk the whole sequence
+		for _t,v in ipairs(input) do
+			-- make zero for each step
+			-- look at each unit
+			if v:equal(_stdZero) then
+				-- if it was zero, then zero the gradOutput
+				gradOutput[_t]:zero()
+			end
+		end
+
 	end
 
 end
