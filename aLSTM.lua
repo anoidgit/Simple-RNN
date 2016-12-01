@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.6
+	Version 0.0.7
 
 ]]
 
@@ -915,7 +915,7 @@ function aLSTM:buildUpdateModule()
 	local _um = nn.aSequential()
 		:add(nn.aJoinTable(self.narrowDim,self.narrowDim))
 		:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize))
-		:add(nn.aTanh(tanh))
+		:add(nn.aTanh(true))
 
 	return _um
 
