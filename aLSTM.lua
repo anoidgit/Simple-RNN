@@ -12,13 +12,13 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.15
+	Version 0.0.16
 
 ]]
 
 local aLSTM, parent = torch.class('nn.aLSTM', 'nn.Container')
 
-function aLSTM:__init(inputSize, outputSize, maskZero, remember, seqData)
+function aLSTM:__init(inputSize, outputSize, maskZero, remember)
 
 	parent.__init(self)
 
@@ -37,7 +37,10 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember, seqData)
 	self:prepare()
 
 	-- asign the default method
-	self:_asign(seqData)
+	-- you can not asign the function,
+	-- if you do, the function was saved
+	-- so use inner call
+	--self:_asign(seqData)
 
 	-- forget gate start index
 	-- also was used in updateOutput to prepare init cell and output,
@@ -53,8 +56,23 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember, seqData)
 
 end
 
+function aLSTM:updateOutput(input)
+	return self:_seq_updateOutput(input)
+end
+
+function aLSTM:backward(input, gradOutput, scale)
+	return self:_seq_backward(input, gradOutput, scale)
+end
+
+function aLSTM:_forget()
+	self:_table_forget()
+	for _, module in ipairs(self.modules) do
+		module:forget()
+	end
+end
+
 -- asign default method
-function aLSTM:_asign(seqd)
+--[[function aLSTM:_asign(seqd)
 
 	if seqd then
 		self.updateOutput = self._tseq_updateOutput
@@ -67,7 +85,7 @@ function aLSTM:_asign(seqd)
 	end
 	self.updateGradInput = self._seq_updateGradInput
 
-end
+end]]
 
 -- updateOutput called by forward,
 -- It input a time step's input and produce an output
@@ -260,6 +278,8 @@ end
 -- updateOutput for a table sequence
 function aLSTM:_seq_updateOutput(input)
 
+	self.gradInput = nil
+
 	local output = {}
 
 	-- ensure cell and output are ready for the first step
@@ -332,7 +352,7 @@ function aLSTM:_seq_updateOutput(input)
 		-- if training, remember what should remember
 		if self.train then
 			table.insert(self._cell, self.cell)--c[t]
-			table.insert(self._output, _output)--h[t]
+			--table.insert(self._output, _output)--h[t]
 			table.insert(self.otanh, _otanh)--tanh[t]
 			table.insert(self.oifgate, _ifgo)--if[t], input and forget
 			table.insert(self.ohid, _zo)--z[t]
@@ -348,6 +368,7 @@ function aLSTM:_seq_updateOutput(input)
 	-- this have conflict with _step_updateOutput,
 	-- but anyhow do not use them at the same time
 	self.output = output
+	self._output = output
 
 	--[[if self.train then
 		self:_check_table_same(self._cell)
@@ -620,6 +641,8 @@ end
 -- it takes the whole input, gradOutput sequence as input
 -- and it will clear the cache after done backward
 function aLSTM:_seq_backward(input, gradOutput, scale)
+
+	self.output = nil
 
 	-- if need to mask zero, then mask
 	if self.maskzero then
@@ -1159,7 +1182,6 @@ function aLSTM:_accGradParameters(scale)
 	self.sbm.gradBias:narrow(1,1,self.outputSize):add(scale, self._gLCell)
 	self.sbm.gradBias:narrow(1,self.fgstartid,self.outputSize):add(scale, self._gLOutput)
 
-
 end
 
 -- init storage for tensor
@@ -1396,12 +1418,16 @@ function aLSTM:prepare()
 
 	nn.aJoinTable = nn.JoinTable
 	nn.aLinear = nn.Linear
-	require "aSeqTanh"
+	--[[require "aSeqTanh"
 	nn.aTanh = nn.aSeqTanh
 	--nn.aTanh = nn.Tanh
 	require "aSeqSigmoid"
 	nn.aSigmoid = nn.aSeqSigmoid
-	--nn.aSigmoid = nn.Sigmoid
+	--nn.aSigmoid = nn.Sigmoid]]
+	require "aSTTanh"
+	require "aSTSigmoid"
+	nn.aTanh = nn.aSTTanh
+	nn.aSigmoid = nn.aSTSigmoid
 	nn.aSequential = nn.Sequential
 
 end
