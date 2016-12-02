@@ -9,7 +9,7 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.4
+	Version 0.0.5
 
 ]]
 
@@ -23,8 +23,13 @@ function aSeqTanh:__init(reverseOrder)
 		self.rindex = 1
 	end
 
-	self.backward = self.updateGradInput
 	self:forget()
+
+end
+
+function aSeqTanh:backward(input, gradOutput, scale)
+
+	return self:updateGradInput(input, gradOutput)
 
 end
 
