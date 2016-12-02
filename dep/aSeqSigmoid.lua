@@ -9,7 +9,7 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.2
+	Version 0.0.3
 
 ]]
 
@@ -23,8 +23,13 @@ function aSeqSigmoid:__init(reverseOrder)
 		self.rindex = 1
 	end
 
-	self.backward = self.updateGradInput
 	self:forget()
+
+end
+
+function aSeqSigmoid:backward(input, gradOutput, scale)
+
+	return self:updateGradInput(input, gradOutput)
 
 end
 
