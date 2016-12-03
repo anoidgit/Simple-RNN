@@ -12,12 +12,13 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.18
+	Version 0.0.20
 
 ]]
 
 local aLSTM, parent = torch.class('nn.aLSTM', 'nn.Container')
 
+-- generate a module
 function aLSTM:__init(inputSize, outputSize, maskZero, remember)
 
 	parent.__init(self)
@@ -56,31 +57,47 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember)
 
 end
 
+-- fit torch standard,
+-- calc an output for an input,
+-- faster while you just specify which function to use
 function aLSTM:updateOutput(input)
+
 	if torch.type(input) == 'table' then
 		self.tablesequence = true
+		self:_table_clearState()
 		return self:_seq_updateOutput(input)
 	else
 		self.tablesequence = nil
+		self:_tensor_clearState(input)
 		return self:_tseq_updateOutput(input)
 	end
+
 end
 
+-- fit torch standard,
+-- backward,
+-- faster while you just specify which function to use
 function aLSTM:backward(input, gradOutput, scale)
+
 	if torch.type(input) == 'table' then
 		return self:_seq_backward(input, gradOutput, scale)
 	else
 		return self:_tseq_backward(input, gradOutput, scale)
 	end
+
 end
 
-function aLSTM:_forget()
+-- fit torch rnn standard,
+-- clear the cache used
+function aLSTM:clearState()
+
 	if self.tablesequence then
-		self:_table_forget()
+		self:_table_clearState()
 	else
-		self:_tensor_forget()
+		self:_tensor_clearState()
 	end
 	self.tablesequence = nil
+
 end
 
 -- asign default method
@@ -184,6 +201,8 @@ end
 -- updateOutput for tensor input,
 -- input tensor is expected to be seqlen * batchsize * vecsize
 function aLSTM:_tseq_updateOutput(input)
+
+	self.gradInput:resize(0)
 
 	-- get input and output size
 	local iSize = input:size()
@@ -547,7 +566,7 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			end
 
 			-- prepare for next forward sequence, clear cache
-			self:_forget()
+			self:clearState()
 
 		end
 
@@ -637,7 +656,7 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 			else
 				self:_accGradParameters(scale)
 			end
-			self:_forget()
+			self:clearState()
 		end
 
 	end
@@ -870,26 +889,32 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 	__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
 	_gInput:add(__gInput)
 
-	if not self.rememberState or self.firstSequence then
-		self._gLOutput:add(__gLOutput)
-		self._gLCell:add(__gLCell)
-	end
-
 	gradInput[1] = _gInput
 
 	-- accGradParameters for self
 	if self.rememberState then
+
 		if self.firstSequence then
 			-- accGradParameters for self
+			self._gLOutput:add(__gLOutput)
+			self._gLCell:add(__gLCell)
 			self:_accGradParameters(scale)
 			self.firstSequence = false
 		end
+
+		-- prepare for next forward sequence, clear cache
+		self:clearState()
+
 	else
+
+		self._gLOutput:add(__gLOutput)
+		self._gLCell:add(__gLCell)
 		self:_accGradParameters(scale)
+
+		self:forget()
+
 	end
 
-	-- prepare for next forward sequence, clear cache
-	self:_forget()
 
 	self.gradInput = gradInput
 
@@ -910,7 +935,8 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 
 	local _length = iSize[1]
 
-	self.gradInput:resize(iSize)
+	local gradInput = input.new()
+	gradInput:resize(iSize)
 
 	-- remove the last output, because it was never used
 	local _lastOutput = self.output[_length]
@@ -987,7 +1013,7 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 		-- prepare to backward on time step before
 		self.cell = _cPrevCell
 
-		self.gradInput[_length]:copy(_gInput)
+		gradInput[_length]:copy(_gInput)
 
 	else
 
@@ -1057,7 +1083,7 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 		-- move self.cell(current cell) ahead
 		self.cell = _cPrevCell
 
-		self.gradInput[_t]:copy(_gInput)
+		gradInput[_t]:copy(_gInput)
 
 	end
 
@@ -1113,26 +1139,30 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 	__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
 	_gInput:add(__gInput)
 
-	if not self.rememberState or self.firstSequence then
-		self._gLOutput:add(__gLOutput)
-		self._gLCell:add(__gLCell)
-	end
-
-	self.gradInput[1]:copy(_gInput)
-
 	-- accGradParameters for self
 	if self.rememberState then
+
 		if self.firstSequence then
 			-- accGradParameters for self
+			self._gLOutput:add(__gLOutput)
+			self._gLCell:add(__gLCell)
 			self:_accGradParameters(scale)
 			self.firstSequence = false
 		end
+
+		-- prepare for next forward sequence, clear cache
+		self:clearState()
+
 	else
+
+		self._gLOutput:add(__gLOutput)
+		self._gLCell:add(__gLCell)
 		self:_accGradParameters(scale)
+
+		self:forget()
+
 	end
 
-	local gradInput = self.gradInput:clone()
-	self:_forget()-- this forget will clear self.gradInput, so copy it at first
 	self.gradInput:resizeAs(gradInput):copy(gradInput)
 
 	return self.gradInput
@@ -1198,9 +1228,9 @@ function aLSTM:_accGradParameters(scale)
 end
 
 -- init storage for tensor
-function aLSTM:_tensor_forget(tsr)
+function aLSTM:_tensor_clearState(tsr)
 
-	tsr = tsr or torch.Tensor()
+	tsr = tsr or self.sbm.bias
 
 	-- cell sequence
 	if not self._cell then
@@ -1208,18 +1238,22 @@ function aLSTM:_tensor_forget(tsr)
 	else
 		self._cell:resize(0)
 	end
+
 	-- last cell
 	self.cell = nil
+
 	-- output sequence
 	if not self.output then
 		self.output = tsr.new()
 	else
 		self.output:resize(0)
 	end
+
 	-- last output
 	-- here switch the usage of self.output and self._output for fit the standard of nn.Module
 	-- just point self._output to keep aLSTM standard
 	self._output = self.output
+
 	-- gradInput sequence
 	if not self.gradInput then
 		self.gradInput = tsr.new()
@@ -1233,18 +1267,21 @@ function aLSTM:_tensor_forget(tsr)
 	else
 		self.otanh:resize(0)
 	end
+
 	-- output of the input and forget gate
 	if not self.oifgate then
 		self.oifgate = tsr.new()
 	else
 		self.oifgate:resize(0)
 	end
+
 	-- output of the output gate
 	if not self.oogate then
 		self.oogate = tsr.new()
 	else
 		self.oogate:resize(0)
 	end
+
 	-- output of z(hidden)
 	if not self.ohid then
 		self.ohid = tsr.new()
@@ -1259,7 +1296,7 @@ function aLSTM:_tensor_forget(tsr)
 end
 
 -- clear the storage
-function aLSTM:_table_forget()
+function aLSTM:_table_clearState()
 
 	-- cell sequence
 	self._cell = {}
@@ -1290,7 +1327,7 @@ end
 -- forget the history
 function aLSTM:forget()
 
-	self:_forget()
+	self:clearState()
 
 	for _, module in ipairs(self.modules) do
 		module:forget()
