@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.16
+	Version 0.0.17
 
 ]]
 
@@ -57,18 +57,18 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember)
 end
 
 function aLSTM:updateOutput(input)
-	return self:_seq_updateOutput(input)
+	return self:_tseq_updateOutput(input)
+	--return self:_seq_updateOutput(input)
 end
 
 function aLSTM:backward(input, gradOutput, scale)
-	return self:_seq_backward(input, gradOutput, scale)
+	return self:_tseq_backward(input, gradOutput, scale)
+	--return self:_seq_backward(input, gradOutput, scale)
 end
 
 function aLSTM:_forget()
-	self:_table_forget()
-	for _, module in ipairs(self.modules) do
-		module:forget()
-	end
+	--self:_table_forget()
+	self:_tensor_forget()
 end
 
 -- asign default method
@@ -177,6 +177,7 @@ function aLSTM:_tseq_updateOutput(input)
 	local iSize = input:size()
 	local oSize = input:size()
 	oSize[3] = self.outputSize
+	self.output = input.new()
 	self.output:resize(oSize)
 
 	if self.train then
@@ -1279,6 +1280,10 @@ function aLSTM:forget()
 
 	self:_forget()
 
+	for _, module in ipairs(self.modules) do
+		module:forget()
+	end
+
 	-- clear last cell and output
 	self.lastCell = nil
 	self.lastOutput = nil
@@ -1339,7 +1344,7 @@ function aLSTM:reset()
 
 	--[[ put the modules in self.modules,
 	so the default method could be done correctly]]
-	self.modules = {self.ifgate, self.zmod, self.ogate, self.sbm}
+	self.modules = {self.ifgate, self.zmod, self.ogate, self.sbm, self.tanh}
 
 	self:forget()
 
@@ -1418,16 +1423,23 @@ function aLSTM:prepare()
 
 	nn.aJoinTable = nn.JoinTable
 	nn.aLinear = nn.Linear
-	--[[require "aSeqTanh"
+
+	-- Warning: Use Sequence Tanh and Sigmoid are fast
+	-- but be very very cautious!!!
+	-- you need to give it an argument true,
+	-- if you need it work in reverse order
+	-- and you must turn to evaluate state if you were evaluate,
+	-- otherwise the output are remembered!
+	require "aSeqTanh"
 	nn.aTanh = nn.aSeqTanh
 	--nn.aTanh = nn.Tanh
 	require "aSeqSigmoid"
 	nn.aSigmoid = nn.aSeqSigmoid
-	--nn.aSigmoid = nn.Sigmoid]]
-	require "aSTTanh"
+	--nn.aSigmoid = nn.Sigmoid
+	--[[require "aSTTanh"
 	require "aSTSigmoid"
 	nn.aTanh = nn.aSTTanh
-	nn.aSigmoid = nn.aSTSigmoid
+	nn.aSigmoid = nn.aSTSigmoid]]
 	nn.aSequential = nn.Sequential
 
 end
