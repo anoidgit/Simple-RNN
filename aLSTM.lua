@@ -80,6 +80,7 @@ function aLSTM:_forget()
 	else
 		self:_tensor_forget()
 	end
+	self.tablesequence = nil
 end
 
 -- asign default method
