@@ -9,7 +9,7 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.3
+	Version 0.0.4
 
 ]]
 
@@ -27,6 +27,24 @@ function aSeqSigmoid:__init(reverseOrder)
 
 end
 
+-- evaluate
+function aSeqSigmoid:evaluate()
+
+	self.train = false
+
+	self:forget()
+
+end
+
+-- train
+function aSeqSigmoid:training()
+
+	self.train = true
+
+	self:forget()
+
+end
+
 function aSeqSigmoid:backward(input, gradOutput, scale)
 
 	return self:updateGradInput(input, gradOutput)
@@ -36,7 +54,9 @@ end
 function aSeqSigmoid:updateOutput(input)
 
 	local output = torch.sigmoid(input)
-	table.insert(self._output,output)
+	if self.train then
+		table.insert(self._output,output)
+	end
 	self.output = output
 
 	return self.output
