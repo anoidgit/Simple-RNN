@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.17
+	Version 0.0.18
 
 ]]
 
@@ -57,18 +57,29 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember)
 end
 
 function aLSTM:updateOutput(input)
-	return self:_tseq_updateOutput(input)
-	--return self:_seq_updateOutput(input)
+	if torch.type(input) == 'table' then
+		self.tablesequence = true
+		return self:_seq_updateOutput(input)
+	else
+		self.tablesequence = nil
+		return self:_tseq_updateOutput(input)
+	end
 end
 
 function aLSTM:backward(input, gradOutput, scale)
-	return self:_tseq_backward(input, gradOutput, scale)
-	--return self:_seq_backward(input, gradOutput, scale)
+	if torch.type(input) == 'table' then
+		return self:_seq_backward(input, gradOutput, scale)
+	else
+		return self:_tseq_backward(input, gradOutput, scale)
+	end
 end
 
 function aLSTM:_forget()
-	--self:_table_forget()
-	self:_tensor_forget()
+	if self.tablesequence then
+		self:_table_forget()
+	else
+		self:_tensor_forget()
+	end
 end
 
 -- asign default method
