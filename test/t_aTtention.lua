@@ -8,10 +8,12 @@ vecsize = 4
 require "nn"
 require "aSeqBiLinear"
 require "aTtention"
+require "aSeqSoftMax"
 
 nn.aLinear = nn.Linear
 nn.aSequential = nn.Sequential
-nn.aSoftMax = nn.SoftMax
+nn.aSoftMax = nn.aSeqSoftMax
+--nn.aSoftMax = nn.SoftMax
 nn.aTranspose = nn.Transpose
 
 tmod = nn.aTtention(vecsize, true)
