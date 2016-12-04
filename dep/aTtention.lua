@@ -108,8 +108,9 @@ function aTtention:prepare()
 
 	require "aSeqBiLinear"
 	nn.aSequential = nn.Sequential
-	nn.aSoftMax = nn.SoftMax
 	nn.aTranspose = nn.Transpose
+	require "aSeqSoftMax"
+	nn.aSoftMax = nn.aSeqSoftMax
 
 end
 
@@ -117,9 +118,9 @@ function aTtention:reset()
 
 	self.module = nn.Sequential()
 		:add(nn.aSeqBiLinear(self.vecsize, self.rindex==nil))
-		:add(nn.aTranspose({1,2}))
-		:add(nn.aSoftMax())
-		:add(nn.aTranspose({1,2}))
+		--:add(nn.aTranspose({1,2}))
+		:add(nn.aSoftMax(self.rindex==nil, true))
+		--:add(nn.aTranspose({1,2}))
 
 	self.modules = {self.module}
 
