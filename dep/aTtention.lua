@@ -7,7 +7,7 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
@@ -109,6 +109,7 @@ function aTtention:prepare()
 	require "aSeqBiLinear"
 	nn.aSequential = nn.Sequential
 	nn.aSoftMax = nn.SoftMax
+	nn.aTranspose = nn.Transpose
 
 end
 
@@ -116,7 +117,9 @@ function aTtention:reset()
 
 	self.module = nn.Sequential()
 		:add(nn.aSeqBiLinear(self.vecsize, self.rindex==nil))
+		:add(nn.aTranspose({1,2}))
 		:add(nn.aSoftMax())
+		:add(nn.aTranspose({1,2}))
 
 	self.modules = {self.module}
 
