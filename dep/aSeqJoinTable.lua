@@ -7,7 +7,7 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
@@ -75,7 +75,7 @@ function aSeqJoinTable:updateOutput(input)
 				+ currentOutput:size(dimension)
 		end
 	end
-	local output = input.new()
+	local output = input[1].new()
 	output:resize(self.size)
 
 	local offset = 1
