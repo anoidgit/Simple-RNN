@@ -12,6 +12,7 @@ require "aTtention"
 nn.aLinear = nn.Linear
 nn.aSequential = nn.Sequential
 nn.aSoftMax = nn.SoftMax
+nn.aTranspose = nn.Transpose
 
 tmod = nn.aTtention(vecsize, true)
 tmod:training()
