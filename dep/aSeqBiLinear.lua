@@ -4,11 +4,11 @@
 	Copyright (c) 2016 Hongfei Xu
 
 	This scripts implement a core for standard Bilinear
-	This implementation is not for batch input,
-	Input should be {seqlen*vecsize, vecsize}
-	aCBLAttention will take care of batch data based on this module and nn.Bottle
+	Input should be {seqlen(*batchsize)*vecsize, (batchsize*)vecsize}
 
-	Version 0.0.1
+	This module was designed for aTtension.
+
+	Version 0.0.3
 
 ]]
 
@@ -25,6 +25,22 @@ function aSeqBiLinear:__init(vecsize, reverseOrder)
 	end
 
 	self:reset()
+
+end
+
+function aSeqBiLinear:training()
+
+	self.train = true
+	self.module:training()
+	self:clearState()
+
+end
+
+function aSeqBiLinear:evaluate()
+
+	self.train = false
+	self.module:evaluate()
+	self:clearState()
 
 end
 
@@ -140,5 +156,11 @@ function aSeqBiLinear:reset()
 	self.modules = {self.module}
 
 	self._transfer ={}
+
+end
+
+function aSeqBiLinear:prepare()
+
+	nn.aLinear = nn.Linear
 
 end
