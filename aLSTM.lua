@@ -771,7 +771,7 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 
 		_cInput = input[_t]-- current input
 
-		if _t >1 then
+		if _t > 1 then
 			_cPrevOutput = self.output[_t - 1]-- previous output
 			_cPrevCell = self._cell[_t - 1]-- previous cell
 		else
