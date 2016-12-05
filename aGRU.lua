@@ -734,11 +734,9 @@ function aGRU:_tseq_backward(input, gradOutput, scale)
 			self._gLOutput:add(torch.cmul(_gro, _cPrevOutput))
 			self._gLOutput:add(torch.cmul(_cGradOut, _coigate))
 
-		else
-
-			gradInput[_t]:copy(_gInput)
-
 		end
+
+		gradInput[_t]:copy(_gInput)
 
 	end
 
