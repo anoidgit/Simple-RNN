@@ -9,7 +9,7 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.4
+	Version 0.1.0
 
 ]]
 
@@ -23,7 +23,7 @@ function aSeqSigmoid:__init(reverseOrder)
 		self.rindex = 1
 	end
 
-	self:forget()
+	self:clearState()
 
 end
 
@@ -32,7 +32,7 @@ function aSeqSigmoid:evaluate()
 
 	self.train = false
 
-	self:forget()
+	self:clearState()
 
 end
 
@@ -41,7 +41,7 @@ function aSeqSigmoid:training()
 
 	self.train = true
 
-	self:forget()
+	self:clearState()
 
 end
 
@@ -53,7 +53,12 @@ end
 
 function aSeqSigmoid:updateOutput(input)
 
-	local output = torch.sigmoid(input)
+	local output = input.new()
+	output:resizeAs(input)
+	input.THNN.Sigmoid_updateOutput(
+		input:cdata(),
+		output:cdata()
+	)
 	if self.train then
 		table.insert(self._output,output)
 	end
@@ -67,12 +72,13 @@ function aSeqSigmoid:updateGradInput(input, gradOutput)
 
 	local output = table.remove(self._output, self.rindex)
 
-	local gradInput = input.new()
-	gradInput:resizeAs(input):fill(1)
-	gradInput:csub(output)
-	gradInput:cmul(output)
-	gradInput:cmul(gradOutput)
-	self.gradInput = gradInput
+	self.gradInput = self.gradInput or input.new()
+	input.THNN.Sigmoid_updateGradInput(
+		input:cdata(),
+		gradOutput:cdata(),
+		self.gradInput:cdata(),
+		output:cdata()
+	)
 
 	return self.gradInput
 
@@ -80,8 +86,14 @@ end
 
 -- Warning: This method is dangerous,
 -- unless you know what you are doing.
-function aSeqSigmoid:forget()
+function aSeqSigmoid:clearState()
 
 	self._output = {}
+
+end
+
+function aSeqSigmoid:forget()
+
+	self:clearState()
 
 end
