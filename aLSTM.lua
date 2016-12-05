@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.1.0
+	Version 0.1.1
 
 ]]
 
@@ -217,7 +217,6 @@ function aLSTM:_tseq_updateOutput(input)
 	if self.train then
 
 		self._cell:resize(oSize)
-		self.gradInput:resize(iSize)
 		self.otanh:resize(oSize)
 		self.oogate:resize(oSize)
 		self.ohid:resize(oSize)
@@ -1152,7 +1151,7 @@ function aLSTM:buildSelfBias(outputSize)
 end
 
 -- prepare for LSTM
-function aLSTM:prepare()
+--[[function aLSTM:prepare()
 
 	-- Warning: This method may be DEPRECATED at any time
 	-- it is for debug use
@@ -1182,7 +1181,7 @@ function aLSTM:prepare()
 	nn.aSigmoid = nn.aSTSigmoid]]
 	nn.aSequential = nn.Sequential
 
-end
+end]]
 
 -- mask zero for a step
 function aLSTM:_step_makeZero(input, gradOutput)
