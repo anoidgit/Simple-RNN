@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.1.1
+	Version 0.1.2
 
 ]]
 
@@ -674,14 +674,20 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 		_gInput:add(__gInput)
 
 		if _t > 1 then
+
 			self._gLOutput:add(__gLOutput)
 			self._gLCell:add(__gLCell)
 
+			gradInput[_t] = _gInput:clone()
+
 			-- move self.cell(current cell) ahead
 			self.cell = _cPrevCell
-		end
 
-		gradInput[_t] = _gInput:clone()
+		else
+
+			gradInput[_t] = _gInput
+
+		end
 
 	end
 
