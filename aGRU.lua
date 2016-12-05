@@ -10,7 +10,7 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.0.2
+	Version 0.0.3
 
 ]]
 
@@ -475,6 +475,7 @@ function aGRU:_step_backward(input, gradOutput, scale)
 
 	-- backward ifgate(input and forget gate)
 	-- compute gradOutput
+	_gg = gradInput.new()
 	_gg:resize(self.batchsize, 2 * self.outputSize)
 	_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(gradOutput, _cPrevOutput - _coh))
 	_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gro, _cPrevOutput))
@@ -598,6 +599,7 @@ function aGRU:_seq_backward(input, gradOutput, scale)
 
 		-- backward ifgate(input and forget gate)
 		-- compute gradOutput
+		_gg = _gInput.new()
 		_gg:resize(self.batchsize, 2 * self.outputSize)
 		_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_cGradOut, _cPrevOutput - _coh))
 		_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gro, _cPrevOutput))
@@ -721,6 +723,7 @@ function aGRU:_tseq_backward(input, gradOutput, scale)
 
 		-- backward ifgate(input and forget gate)
 		-- compute gradOutput
+		_gg = _gInput.new()
 		_gg:resize(self.batchsize, 2 * self.outputSize)
 		_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_cGradOut, _cPrevOutput - _coh))
 		_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gro, _cPrevOutput))
