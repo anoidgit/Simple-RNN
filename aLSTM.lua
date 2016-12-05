@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.1.2
+	Version 0.1.3
 
 ]]
 
@@ -455,7 +455,7 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 	local _gCell, _gg, gradInput
 
 	-- preclaim to clear code
-	local _cInput, _cPrevOutput, _cPrevCell, _cotanh, _coogate, _coz, _coifgate, _coigate, _cofgate
+	local _cPrevOutput, _cPrevCell, _cotanh, _coogate, _coz, _coifgate, _coigate, _cofgate
 
 	-- if this is not the last step
 	if self._gLOutput then
@@ -488,8 +488,6 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 		nfirstep = false
 	end
 
-	_cInput = table.remove(input)-- current input
-
 	_cotanh = table.remove(self.otanh)-- output of the tanh after cell for the final output
 	_coogate = table.remove(self.oogate)-- output of the forget gate
 	_coz = table.remove(self.ohid)-- hidden unit produced by input, z[t]
@@ -505,7 +503,7 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 	_gg = torch.cmul(gradOutput, _cotanh)
 
 	-- backward output gate
-	gradInput, self._gLOutput, _gCell = unpack(self.ogate:backward({_cInput, _cPrevOutput, self.cell}, _gg, scale))
+	gradInput, self._gLOutput, _gCell = unpack(self.ogate:backward({input, _cPrevOutput, self.cell}, _gg, scale))
 
 	if self.__gLCell then
 		-- add gradOutput from the sequence behind
@@ -516,7 +514,7 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 	_gCell:add(self.tanh:updateGradInput(self.cell, torch.cmul(gradOutput, _coogate)))
 
 	-- backward update gate
-	local __gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
+	local __gInput, __gLOutput = unpack(self.zmod:backward({input, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
 	gradInput:add(__gInput)
 	self._gLOutput:add(__gLOutput)
 
@@ -530,7 +528,7 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 	_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
 	-- backward the gate
 	local __gLCell
-	__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({_cInput, _cPrevOutput, _cPrevCell}, _gg, scale))
+	__gInput, __gLOutput, __gLCell = unpack(self.ifgate:backward({input, _cPrevOutput, _cPrevCell}, _gg, scale))
 	gradInput:add(__gInput)
 
 	if nfirstep then
