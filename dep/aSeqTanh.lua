@@ -3,19 +3,19 @@
 
 	Copyright (c) 2016 Hongfei Xu
 
-	This scripts implement a standard sigmoid activation function,
+	This scripts implement a standard tanh activation function,
 	It forward the sequence from head to tail,
 	and backward in reverse order.
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.4
+	Version 0.1.0
 
 ]]
 
-local aSeqSigmoid = torch.class('nn.aSeqSigmoid', 'nn.Module')
+local aSeqTanh = torch.class('nn.aSeqTanh', 'nn.Module')
 
-function aSeqSigmoid:__init(reverseOrder)
+function aSeqTanh:__init(reverseOrder)
 
 	if reverseOrder then
 		self.rindex = nil
@@ -23,37 +23,43 @@ function aSeqSigmoid:__init(reverseOrder)
 		self.rindex = 1
 	end
 
-	self:forget()
+	self:clearState()
 
 end
 
 -- evaluate
-function aSeqSigmoid:evaluate()
+function aSeqTanh:evaluate()
 
 	self.train = false
 
-	self:forget()
+	self:clearState()
 
 end
 
 -- train
-function aSeqSigmoid:training()
+function aSeqTanh:training()
 
 	self.train = true
 
-	self:forget()
+	self:clearState()
 
 end
 
-function aSeqSigmoid:backward(input, gradOutput, scale)
+function aSeqTanh:backward(input, gradOutput, scale)
 
 	return self:updateGradInput(input, gradOutput)
 
 end
 
-function aSeqSigmoid:updateOutput(input)
+function aSeqTanh:updateOutput(input)
 
-	local output = torch.sigmoid(input)
+	local output = input.new()
+	output:resizeAs(input)
+
+	input.THNN.Tanh_updateOutput(
+		input:cdata(),
+		output:cdata()
+	)
 	if self.train then
 		table.insert(self._output,output)
 	end
@@ -63,25 +69,32 @@ function aSeqSigmoid:updateOutput(input)
 
 end
 
-function aSeqSigmoid:updateGradInput(input, gradOutput)
+function aSeqTanh:updateGradInput(input, gradOutput)
 
 	local output = table.remove(self._output, self.rindex)
 
-	local gradInput = input.new()
-	gradInput:resizeAs(input):fill(1)
-	gradInput:csub(output)
-	gradInput:cmul(output)
-	gradInput:cmul(gradOutput)
-	self.gradInput = gradInput
-
+	self.gradInput = self.gradInput or input.new()
+	self.gradInput:resizeAs(input)
+	input.THNN.Tanh_updateGradInput(
+		input:cdata(),
+		gradOutput:cdata(),
+		self.gradInput:cdata(),
+		output:cdata()
+	)
 	return self.gradInput
 
 end
 
 -- Warning: This method is dangerous,
 -- unless you know what you are doing.
-function aSeqSigmoid:forget()
+function aSeqTanh:clearState()
 
 	self._output = {}
+
+end
+
+function aSeqTanh:forget()
+
+	self:clearState()
 
 end
