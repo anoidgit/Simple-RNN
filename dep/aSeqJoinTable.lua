@@ -7,7 +7,7 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.2
+	Version 0.0.3
 
 ]]
 
@@ -44,6 +44,7 @@ end
 function aSeqJoinTable:clearState()
 
 	self._output = {}
+	self.forwarded = false
 
 end
 
@@ -87,6 +88,7 @@ function aSeqJoinTable:updateOutput(input)
 	end
 	if self.train then
 		table.insert(self._output, output)
+		self.forwarded = true
 	end
 	self.output = output
 	return self.output
@@ -114,6 +116,10 @@ function aSeqJoinTable:updateGradInput(input, gradOutput)
 							 currentOutput:size(dimension))
 		self.gradInput[i]:copy(currentGradInput)
 		offset = offset + currentOutput:size(dimension)
+	end
+	if self.forwarded then
+		table.remove(self._output)
+		self.forwarded = false
 	end
 	self.output = table.remove(self._output, self.rindex)
 	return self.gradInput
