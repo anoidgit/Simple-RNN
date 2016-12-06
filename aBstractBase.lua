@@ -5,7 +5,7 @@
 
 	This scripts implement an aBstractBase for RNN:
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
@@ -94,7 +94,7 @@ function aBstractBase:_ApplyReset(stdv)
 
 	stdv = stdv or 1.0 / math.sqrt(self.outputSize + self.inputSize)
 
-	for _, module in self.modules do
+	for _, module in ipairs(self.modules) do
 		module:reset(stdv)
 	end
 
