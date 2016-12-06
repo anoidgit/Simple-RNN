@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.1.5
+	Version 0.1.6
 
 ]]
 
@@ -570,6 +570,8 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 	local _cGradOut, _cInput, _cPrevOutput, _cPrevCell, _cotanh, _coifgate, _coogate, _coz, _coigate, _cofgate, _gg
 	local __gLCell
 
+	local __gInput, __gLOutput
+
 	-- backward from end to 1
 	for _t = _length, 1, -1 do
 
@@ -616,7 +618,7 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 		end
 
 		-- backward hidden
-		local __gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
+		__gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
 		_gInput:add(__gInput)
 		self._gLOutput:add(__gLOutput)
 
@@ -717,6 +719,8 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 	local _cGradOut, _cInput, _cPrevOutput, _cPrevCell, _cotanh, _coifgate, _coogate, _coz, _coigate, _cofgate, _gg
 	local __gLCell
 
+	local __gInput, __gLOutput
+
 		-- backward from end to 1
 	for _t = _length, 1, -1 do
 
@@ -764,7 +768,7 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 		end
 
 		-- backward hidden
-		local __gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
+		__gInput, __gLOutput = unpack(self.zmod:backward({_cInput, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
 		_gInput:add(__gInput)
 		self._gLOutput:add(__gLOutput)
 
@@ -1053,7 +1057,7 @@ function aLSTM:buildSelfBias(outputSize)
 end
 
 -- prepare for LSTM
---[[function aLSTM:prepare()
+--[==[function aLSTM:prepare()
 
 	-- Warning: This method may be DEPRECATED at any time
 	-- it is for debug use
@@ -1083,7 +1087,7 @@ end
 	nn.aSigmoid = nn.aSTSigmoid]]
 	nn.aSequential = nn.Sequential
 
-end]]
+end]==]
 
 -- introduce self
 function aLSTM:__tostring__()
