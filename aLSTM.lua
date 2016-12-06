@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.1.6
+	Version 0.1.7
 
 ]]
 
@@ -1009,8 +1009,27 @@ function aLSTM:reset(stdv)
 
 end
 
--- build input and forget gate
 function aLSTM:buildIFModule()
+
+	local _ifm = nn.aSequential()
+		:add(nn.aConcatTable()
+			:add(nn.aSequential()
+				:add(nn.aNarrowTable(1,2))
+				:add(nn.aJoinTable(self.narrowDim, self.narrowDim, true))
+				:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize * 2)))
+			:add(nn.aSequential()
+				:add(nn.aSelectTable(-1))
+				:add(nn.aReplicate(2, self,narrowDim, self.narrowDim))
+				:add(nn.aCMul(self.outputSize * 2))))
+		:add(nn.aCAddTable())
+		:add(nn.aSigmoid(true))
+
+	return _ifm
+
+end
+
+-- build input and forget gate
+--[[function aLSTM:buildIFModule()
 
 	local _ifm = nn.aSequential()
 		:add(nn.aJoinTable(self.narrowDim, self.narrowDim, true))
@@ -1019,7 +1038,7 @@ function aLSTM:buildIFModule()
 
 	return _ifm
 
-end
+end]]
 
 -- build output gate
 function aLSTM:buildOGModule()
