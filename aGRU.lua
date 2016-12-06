@@ -10,7 +10,7 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.1.0
+	Version 0.1.1
 
 ]]
 
@@ -53,18 +53,6 @@ function aGRU:__init(inputSize, outputSize, maskZero, remember)
 	self.narrowDim = 1
 
 	self:reset()
-
-end
-
-	if self.tablesequence then
-		self:_table_clearState()
-	else
-		self:_tensor_clearState()
-	end
-
-	--[[for _, module in ipairs(self.modules) do
-		module:clearState()
-	end]]
 
 end
 
@@ -937,7 +925,7 @@ function aGRU:buildSelfBias(outputSize)
 end
 
 -- prepare for GRU
---[[function aGRU:prepare()
+--[=[function aGRU:prepare()
 
 	-- Warning: This method may be DEPRECATED at any time
 	-- it is for debug use
@@ -965,7 +953,7 @@ end
 	nn.aSigmoid = nn.aSTSigmoid]]
 	nn.aSequential = nn.Sequential
 
-end]]
+end]=]
 
 -- introduce self
 function aGRU:__tostring__()
