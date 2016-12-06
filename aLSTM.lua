@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.1.4
+	Version 0.1.5
 
 ]]
 
@@ -980,7 +980,7 @@ function aLSTM:type(type, ...)
 end
 
 -- reset the module
-function aLSTM:reset()
+function aLSTM:reset(stdv)
 
 	self.ifgate = self:buildIFModule()
 	self.zmod = self:buildUpdateModule()
@@ -998,6 +998,8 @@ function aLSTM:reset()
 	--[[ put the modules in self.modules,
 	so the default method could be done correctly]]
 	self.modules = {self.ifgate, self.zmod, self.ogate, self.sbm, self.tanh}
+
+	self:_ApplyReset(stdv)
 
 	self:forget()
 
