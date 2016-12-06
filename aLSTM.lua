@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.1.8
+	Version 0.1.9
 
 ]]
 
@@ -1019,11 +1019,11 @@ function aLSTM:buildIFModule()
 				:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize * 2)))
 			:add(nn.aSequential()
 				:add(nn.aSelectTable(-1))
-				--:add(nn.aRepeat(2, self,narrowDim, self.narrowDim))
-				:add(nn.aConcatTable()
+				:add(nn.aRepeat(2, self.narrowDim, self.narrowDim))
+				--[[:add(nn.aConcatTable()
 					:add(nn.Identity())
 					:add(nn.Identity()))
-				:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
+				:add(nn.aJoinTable(self.narrowDim, self.narrowDim))]]
 				:add(nn.aCMul(self.outputSize * 2))))
 		:add(nn.aCAddTable())
 		:add(nn.aSigmoid(true))
