@@ -17,7 +17,7 @@
 ]]
 
 local aLSTM, parent = torch.class('nn.aLSTM', 'nn.aBstractSeq')
-local aLSTM, parent = torch.class('nn.aLSTM', 'nn.aBstractStep')
+--local aLSTM, parent = torch.class('nn.aLSTM', 'nn.aBstractStep')
 
 -- generate a module
 function aLSTM:__init(inputSize, outputSize, maskZero, remember)
