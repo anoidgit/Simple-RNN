@@ -12,11 +12,12 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.1.3
+	Version 0.1.4
 
 ]]
 
-local aLSTM, parent = torch.class('nn.aLSTM', 'nn.Container')
+local aLSTM, parent = torch.class('nn.aLSTM', 'nn.aBstractSeq')
+local aLSTM, parent = torch.class('nn.aLSTM', 'nn.aBstractStep')
 
 -- generate a module
 function aLSTM:__init(inputSize, outputSize, maskZero, remember)
@@ -54,52 +55,6 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember)
 	self.narrowDim = 1
 
 	self:reset()
-
-end
-
--- fit torch standard,
--- calc an output for an input,
--- faster while you just specify which function to use
-function aLSTM:updateOutput(input)
-
-	if torch.type(input) == 'table' then
-		self.tablesequence = true
-		self:_table_clearState()
-		return self:_seq_updateOutput(input)
-	else
-		self.tablesequence = nil
-		self:_tensor_clearState(input)
-		return self:_tseq_updateOutput(input)
-	end
-
-end
-
--- fit torch standard,
--- backward,
--- faster while you just specify which function to use
-function aLSTM:backward(input, gradOutput, scale)
-
-	if torch.type(input) == 'table' then
-		return self:_seq_backward(input, gradOutput, scale)
-	else
-		return self:_tseq_backward(input, gradOutput, scale)
-	end
-
-end
-
--- fit torch rnn standard,
--- clear the cache used
-function aLSTM:clearState()
-
-	if self.tablesequence then
-		self:_table_clearState()
-	else
-		self:_tensor_clearState()
-	end
-
-	--[[for _, module in ipairs(self.modules) do
-		module:clearState()
-	end]]
 
 end
 
@@ -229,7 +184,9 @@ function aLSTM:_tseq_updateOutput(input)
 	-- ensure cell and output are ready for the first step
 	-- set batch size and prepare the cell and output
 	local _nIdim = input[1]:nDimension()
+
 	if _nIdim>1 then
+
 		self.batchsize = input[1]:size(1)
 
 		-- if need start from last state of the previous sequence
@@ -250,7 +207,9 @@ function aLSTM:_tseq_updateOutput(input)
 
 		-- narrow dimension
 		self.narrowDim = _nIdim
+
 	else
+
 		self.batchsize = nil
 
 		if self.rememberState and self.lastCell then
@@ -263,7 +222,9 @@ function aLSTM:_tseq_updateOutput(input)
 
 		-- narrow dimension
 		self.narrowDim = 1
+
 	end
+
 	self.cell = self.cell0
 	local _output = self.output0
 
@@ -861,29 +822,6 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 
 end
 
--- updateGradInput for sequence,
--- in fact, it call backward
-function aLSTM:_seq_updateGradInput(input, gradOutput)
-
-	return self:backward(input, gradOutput)
-
-end
-
--- modules in aLSTM.modules were done while backward
-function aLSTM:accGradParameters(input, gradOutput, scale)
-
-	if self.rememberState then
-		if self.firstSequence then
-			-- accGradParameters for self
-			self:_accGradParameters(scale)
-			self.firstSequence = false
-		end
-	else
-		self:_accGradParameters(scale)
-	end
-
-end
-
 -- updateParameters 
 --[[function aLSTM:updateParameters(learningRate)
 
@@ -1041,32 +979,6 @@ function aLSTM:type(type, ...)
 
 end
 
--- evaluate
-function aLSTM:evaluate()
-
-	self.train = false
-
-	for _, module in ipairs(self.modules) do
-		module:evaluate()
-	end
-
-	self:forget()
-
-end
-
--- train
-function aLSTM:training()
-
-	self.train = true
-
-	for _, module in ipairs(self.modules) do
-		module:training()
-	end
-
-	self:forget()
-
-end
-
 -- reset the module
 function aLSTM:reset()
 
@@ -1086,22 +998,6 @@ function aLSTM:reset()
 	--[[ put the modules in self.modules,
 	so the default method could be done correctly]]
 	self.modules = {self.ifgate, self.zmod, self.ogate, self.sbm, self.tanh}
-
-	self:forget()
-
-end
-
--- remember last state or not
-function aLSTM:remember(mode)
-
-	-- set default to both
-	local _mode = mode or "both"
-
-	if _mode == "both" or _mode == true then
-		self.rememberState = true
-	else
-		self.rememberState = nil
-	end
 
 	self:forget()
 
@@ -1186,108 +1082,6 @@ end
 	nn.aSequential = nn.Sequential
 
 end]]
-
--- mask zero for a step
-function aLSTM:_step_makeZero(input, gradOutput)
-
-	if self.batchsize then
-		-- if batch input
-		
-		-- get a zero unit
-		local _stdZero = input.new()
-		_stdZero:resizeAs(input[1]):zero()
-		-- look at each unit
-		for _t = 1, self.batchsize do
-			if input[_t]:equal(_stdZero) then
-				-- if it was zero, then zero the gradOutput
-				gradOutput[_t]:zero()
-			end
-		end
-	else
-		-- if not batch
-
-		local _stdZero = input.new()
-		_stdZero:resizeAs(input):zero()
-		if input:equal(_stdZero) then
-			gradOutput:zero()
-		end
-	end
-
-end
-
--- mask zero for a sequence
-function aLSTM:_seq_makeZero(input, gradOutput)
-
-	-- get a storage
-	local _fi = input[1]
-	local _stdZero = _fi.new()
-
-	if self.batchsize then
-	-- if batch input
-
-		-- get a zero unit
-		_stdZero:resizeAs(_fi[1]):zero()
-
-		-- walk the whole sequence
-		for _t,v in ipairs(input) do
-			-- make zero for each step
-			-- look at each unit
-			local _grad = gradOutput[_t]
-			for __t = 1, self.batchsize do
-				if v[__t]:equal(_stdZero) then
-					-- if it was zero, then zero the gradOutput
-					_grad[__t]:zero()
-				end
-			end
-		end
-
-	else
-
-		_stdZero:resizeAs(_fi):zero()
-
-		-- walk the whole sequence
-		for _t,v in ipairs(input) do
-			-- make zero for each step
-			-- look at each unit
-			if v:equal(_stdZero) then
-				-- if it was zero, then zero the gradOutput
-				gradOutput[_t]:zero()
-			end
-		end
-
-	end
-
-end
-
--- mask zero for a tensor sequence
-function aLSTM:_tseq_makeZero(input, gradOutput)
-
-	local _fi = input[1][1]
-	local iSize = input:size()
-	local _stdZero = _fi.new()
-	_stdZero:resizeAs(_fi):zero()
-	for _i = 1, iSize[1] do
-		local _ti = input[_i]
-		for _j= 1, iSize[2] do
-			if _ti[_j]:equal(_stdZero) then
-				gradOutput[_i][_j]:zero()
-			end
-		end
-	end
-
-end
-
--- copy a table
-function aLSTM:_cloneTable(tbsrc)
-
-	local tbrs = {}
-
-	for k,v in ipairs(tbsrc) do
-		tbrs[k] = v
-	end
-
-	return tbrs
-end
 
 -- introduce self
 function aLSTM:__tostring__()
