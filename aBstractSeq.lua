@@ -5,11 +5,11 @@
 
 	This scripts implement an aBstractSeq for RNN:
 
-	Version 0.0.2
+	Version 0.0.3
 
 ]]
 
-local aBstractSeq, parent = torch.class('nn.aBstractSeq', 'nn.Container')
+local aBstractSeq, parent = torch.class('nn.aBstractSeq', 'nn.aBstractBase')
 
 -- generate a module
 function aBstractSeq:__init()
@@ -61,77 +61,6 @@ function aBstractSeq:clearState()
 	--[[for _, module in ipairs(self.modules) do
 		module:clearState()
 	end]]
-
-end
-
--- updateGradInput for sequence,
--- in fact, it call backward
-function aBstractSeq:updateGradInput(input, gradOutput)
-
-	return self:backward(input, gradOutput)
-
-end
-
--- modules in aBstractSeq.modules were done while backward
-function aBstractSeq:accGradParameters(input, gradOutput, scale)
-
-	if self.rememberState then
-
-		if self.firstSequence then
-
-			-- accGradParameters for self
-			self:_accGradParameters(scale)
-			self.firstSequence = false
-
-		end
-
-	else
-
-		self:_accGradParameters(scale)
-
-	end
-
-end
-
--- evaluate
-function aBstractSeq:evaluate()
-
-	self.train = false
-
-	for _, module in ipairs(self.modules) do
-		module:evaluate()
-	end
-
-	self:forget()
-
-end
-
--- train
-function aBstractSeq:training()
-
-	self.train = true
-
-	for _, module in ipairs(self.modules) do
-		module:training()
-	end
-
-	self:forget()
-
-end
-
--- remember last state or not
-function aBstractSeq:remember(mode)
-
-	-- set default to both
-	local _mode = mode or "both"
-
-	if _mode == "both" or _mode == true then
-		self.rememberState = true
-	else
-		self.rememberState = nil
-	end
-
-	self:forget()
 
 end
 
