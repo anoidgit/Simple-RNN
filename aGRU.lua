@@ -10,7 +10,7 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.0.5
+	Version 0.1.0
 
 ]]
 
@@ -881,7 +881,7 @@ function aGRU:type(type, ...)
 end
 
 -- reset the module
-function aGRU:reset()
+function aGRU:reset(stdv)
 
 	self.ifgate = self:buildIFModule()
 	self.hmod = self:buildUpdateModule()
@@ -894,6 +894,8 @@ function aGRU:reset()
 	--[[ put the modules in self.modules,
 	so the default method could be done correctly]]
 	self.modules = {self.ifgate, self.hmod, self.sbm}
+
+	self:_ApplyReset(stdv)
 
 	self:forget()
 
