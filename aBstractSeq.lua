@@ -5,7 +5,7 @@
 
 	This scripts implement an aBstractSeq for RNN:
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
@@ -66,9 +66,30 @@ end
 
 -- updateGradInput for sequence,
 -- in fact, it call backward
-function aBstractSeq:_seq_updateGradInput(input, gradOutput)
+function aBstractSeq:updateGradInput(input, gradOutput)
 
 	return self:backward(input, gradOutput)
+
+end
+
+-- modules in aBstractSeq.modules were done while backward
+function aBstractSeq:accGradParameters(input, gradOutput, scale)
+
+	if self.rememberState then
+
+		if self.firstSequence then
+
+			-- accGradParameters for self
+			self:_accGradParameters(scale)
+			self.firstSequence = false
+
+		end
+
+	else
+
+		self:_accGradParameters(scale)
+
+	end
 
 end
 
