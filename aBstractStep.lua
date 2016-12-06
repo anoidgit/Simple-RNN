@@ -5,7 +5,7 @@
 
 	This scripts implement an aBstractStep for RNN:
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
@@ -53,6 +53,27 @@ end
 function aBstractStep:updateGradInput(input, gradOutput)
 
 	return self:backward(input, gradOutput)
+
+end
+
+-- modules in aBstractStep.modules were done while backward
+function aBstractStep:accGradParameters(input, gradOutput, scale)
+
+	if self.rememberState then
+
+		if self.firstSequence then
+
+			-- accGradParameters for self
+			self:_accGradParameters(scale)
+			self.firstSequence = false
+
+		end
+
+	else
+
+		self:_accGradParameters(scale)
+
+	end
 
 end
 
