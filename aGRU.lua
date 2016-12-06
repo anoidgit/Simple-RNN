@@ -10,11 +10,12 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.0.3
+	Version 0.0.5
 
 ]]
 
-local aGRU, parent = torch.class('nn.aGRU', 'nn.Container')
+local aGRU, parent = torch.class('nn.aGRU', 'nn.aBstractSeq')
+--local aGRU, parent = torch.class('nn.aGRU', 'nn.aBstractStep')
 
 -- generate a module
 function aGRU:__init(inputSize, outputSize, maskZero, remember)
@@ -55,40 +56,6 @@ function aGRU:__init(inputSize, outputSize, maskZero, remember)
 
 end
 
--- fit torch standard,
--- calc an output for an input,
--- faster while you just specify which function to use
-function aGRU:updateOutput(input)
-
-	if torch.type(input) == 'table' then
-		self.tablesequence = true
-		self:_table_clearState()
-		return self:_seq_updateOutput(input)
-	else
-		self.tablesequence = nil
-		self:_tensor_clearState(input)
-		return self:_tseq_updateOutput(input)
-	end
-
-end
-
--- fit torch standard,
--- backward,
--- faster while you just specify which function to use
-function aGRU:backward(input, gradOutput, scale)
-
-	if torch.type(input) == 'table' then
-		return self:_seq_backward(input, gradOutput, scale)
-	else
-		return self:_tseq_backward(input, gradOutput, scale)
-	end
-
-end
-
--- fit torch rnn standard,
--- clear the cache used
-function aGRU:clearState()
-
 	if self.tablesequence then
 		self:_table_clearState()
 	else
@@ -125,7 +92,7 @@ function aGRU:_step_updateOutput(input)
 	if not self.output then
 		-- set batch size and prepare the output
 		local _nIdim = input:nDimension()
-		if _nIdim>1 then
+		if _nIdim > 1 then
 			self.batchsize = input:size(1)
 
 			if self.rememberState and self.lastOutput then
@@ -220,7 +187,7 @@ function aGRU:_tseq_updateOutput(input)
 	-- ensure output are ready for the first step
 	-- set batch size and prepare the cell and output
 	local _nIdim = input[1]:nDimension()
-	if _nIdim>1 then
+	if _nIdim > 1 then
 		self.batchsize = input[1]:size(1)
 
 		-- if need start from last state of the previous sequence
@@ -303,7 +270,7 @@ function aGRU:_seq_updateOutput(input)
 	-- ensure output are ready for the first step
 	-- set batch size and prepare the cell and output
 	local _nIdim = input[1]:nDimension()
-	if _nIdim>1 then
+	if _nIdim > 1 then
 		self.batchsize = input[1]:size(1)
 
 		-- if need start from last state of the previous sequence
@@ -609,6 +576,7 @@ function aGRU:_seq_backward(input, gradOutput, scale)
 		_gInput:add(__gInput)
 
 		if _t > 1 then
+
 			self._gLOutput:add(torch.cmul(_gro, _cPrevOutput))
 			self._gLOutput:add(torch.cmul(_cGradOut, _coigate))
 			gradInput[_t] = _gInput:clone()
@@ -775,29 +743,6 @@ function aGRU:_tseq_backward(input, gradOutput, scale)
 
 end
 
--- updateGradInput for sequence,
--- in fact, it call backward
-function aGRU:_seq_updateGradInput(input, gradOutput)
-
-	return self:backward(input, gradOutput)
-
-end
-
--- modules in aGRU.modules were done while backward
-function aGRU:accGradParameters(input, gradOutput, scale)
-
-	if self.rememberState then
-		if self.firstSequence then
-			-- accGradParameters for self
-			self:_accGradParameters(scale)
-			self.firstSequence = false
-		end
-	else
-		self:_accGradParameters(scale)
-	end
-
-end
-
 -- updateParameters 
 --[[function aGRU:updateParameters(learningRate)
 
@@ -920,8 +865,7 @@ function aGRU:forget()
 		module:forget()
 	end
 
-	-- clear last cell and output
-	self.lastCell = nil
+	-- clear last output
 	self.lastOutput = nil
 
 	-- set first sequence(will update bias)
@@ -933,32 +877,6 @@ end
 function aGRU:type(type, ...)
 
 	return parent.type(self, type, ...)
-
-end
-
--- evaluate
-function aGRU:evaluate()
-
-	self.train = false
-
-	for _, module in ipairs(self.modules) do
-		module:evaluate()
-	end
-
-	self:forget()
-
-end
-
--- train
-function aGRU:training()
-
-	self.train = true
-
-	for _, module in ipairs(self.modules) do
-		module:training()
-	end
-
-	self:forget()
 
 end
 
@@ -976,22 +894,6 @@ function aGRU:reset()
 	--[[ put the modules in self.modules,
 	so the default method could be done correctly]]
 	self.modules = {self.ifgate, self.hmod, self.sbm}
-
-	self:forget()
-
-end
-
--- remember last state or not
-function aGRU:remember(mode)
-
-	-- set default to both
-	local _mode = mode or "both"
-
-	if _mode == "both" or _mode == true then
-		self.rememberState = true
-	else
-		self.rememberState = nil
-	end
 
 	self:forget()
 
@@ -1032,8 +934,8 @@ function aGRU:buildSelfBias(outputSize)
 
 end
 
--- prepare for LSTM
-function aGRU:prepare()
+-- prepare for GRU
+--[[function aGRU:prepare()
 
 	-- Warning: This method may be DEPRECATED at any time
 	-- it is for debug use
@@ -1061,109 +963,7 @@ function aGRU:prepare()
 	nn.aSigmoid = nn.aSTSigmoid]]
 	nn.aSequential = nn.Sequential
 
-end
-
--- mask zero for a step
-function aGRU:_step_makeZero(input, gradOutput)
-
-	if self.batchsize then
-		-- if batch input
-		
-		-- get a zero unit
-		local _stdZero = input.new()
-		_stdZero:resizeAs(input[1]):zero()
-		-- look at each unit
-		for _t = 1, self.batchsize do
-			if input[_t]:equal(_stdZero) then
-				-- if it was zero, then zero the gradOutput
-				gradOutput[_t]:zero()
-			end
-		end
-	else
-		-- if not batch
-
-		local _stdZero = input.new()
-		_stdZero:resizeAs(input):zero()
-		if input:equal(_stdZero) then
-			gradOutput:zero()
-		end
-	end
-
-end
-
--- mask zero for a sequence
-function aGRU:_seq_makeZero(input, gradOutput)
-
-	-- get a storage
-	local _fi = input[1]
-	local _stdZero = _fi.new()
-
-	if self.batchsize then
-	-- if batch input
-
-		-- get a zero unit
-		_stdZero:resizeAs(_fi[1]):zero()
-
-		-- walk the whole sequence
-		for _t,v in ipairs(input) do
-			-- make zero for each step
-			-- look at each unit
-			local _grad = gradOutput[_t]
-			for __t = 1, self.batchsize do
-				if v[__t]:equal(_stdZero) then
-					-- if it was zero, then zero the gradOutput
-					_grad[__t]:zero()
-				end
-			end
-		end
-
-	else
-
-		_stdZero:resizeAs(_fi):zero()
-
-		-- walk the whole sequence
-		for _t,v in ipairs(input) do
-			-- make zero for each step
-			-- look at each unit
-			if v:equal(_stdZero) then
-				-- if it was zero, then zero the gradOutput
-				gradOutput[_t]:zero()
-			end
-		end
-
-	end
-
-end
-
--- mask zero for a tensor sequence
-function aGRU:_tseq_makeZero(input, gradOutput)
-
-	local _fi = input[1][1]
-	local iSize = input:size()
-	local _stdZero = _fi.new()
-	_stdZero:resizeAs(_fi):zero()
-	for _i = 1, iSize[1] do
-		local _ti = input[_i]
-		for _j= 1, iSize[2] do
-			if _ti[_j]:equal(_stdZero) then
-				gradOutput[_i][_j]:zero()
-			end
-		end
-	end
-
-end
-
--- copy a table
-function aGRU:_cloneTable(tbsrc)
-
-	local tbrs = {}
-
-	for k,v in ipairs(tbsrc) do
-		tbrs[k] = v
-	end
-
-	return tbrs
-end
+end]]
 
 -- introduce self
 function aGRU:__tostring__()
