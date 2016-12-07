@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.2.0
+	Version 0.2.1
 
 ]]
 
@@ -74,13 +74,10 @@ end
 
 end]]
 
--- updateOutput called by forward,
--- It input a time step's input and produce an output
-function aLSTM:_step_updateOutput(input)
+-- prepare data for the first step
+function aLSTM:_prepare_data(input)
 
-	-- ensure cell and output are ready for the first step
-	if not self.cell then
-		-- set batch size and prepare the cell and output
+-- set batch size and prepare the cell and output
 		local _nIdim = input:nDimension()
 		if _nIdim>1 then
 			self.batchsize = input:size(1)
@@ -102,7 +99,9 @@ function aLSTM:_step_updateOutput(input)
 
 			-- narrow dimension
 			self.narrowDim = _nIdim
+
 		else
+
 			self.batchsize = nil
 
 			if self.rememberState and self.lastCell then
@@ -116,8 +115,21 @@ function aLSTM:_step_updateOutput(input)
 			-- narrow dimension
 			self.narrowDim = 1
 		end
+
+end
+
+-- updateOutput called by forward,
+-- It input a time step's input and produce an output
+function aLSTM:_step_updateOutput(input)
+
+	-- ensure cell and output are ready for the first step
+	if not self.cell then
+
+		self:_prepare_data(input)
+
 		self.cell = self.cell0
 		self.output = self.output0
+
 	end
 
 	-- compute input gate and forget gate
@@ -181,49 +193,7 @@ function aLSTM:_tseq_updateOutput(input)
 
 	end
 
-	-- ensure cell and output are ready for the first step
-	-- set batch size and prepare the cell and output
-	local _nIdim = input[1]:nDimension()
-
-	if _nIdim>1 then
-
-		self.batchsize = input[1]:size(1)
-
-		-- if need start from last state of the previous sequence
-		if self.rememberState and self.lastCell then
-			if self.lastCell:size(1) == self.batchsize then
-				self.cell0 = self.lastCell
-				self.output0 = self.lastOutput
-			else
-				self.cell0 = self.lastCell:narrow(1, 1, self.batchsize)
-				self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
-			end
-		else
-			self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
-			self.cell0 = self.cell0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
-			self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
-			self.output0 = self.output0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
-		end
-
-		-- narrow dimension
-		self.narrowDim = _nIdim
-
-	else
-
-		self.batchsize = nil
-
-		if self.rememberState and self.lastCell then
-			self.cell0 = self.lastCell
-			self.output0 = self.lastOutput
-		else
-			self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
-			self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
-		end
-
-		-- narrow dimension
-		self.narrowDim = 1
-
-	end
+	self:_prepare_data(input[1])
 
 	self.cell = self.cell0
 	local _output = self.output0
@@ -277,44 +247,8 @@ function aLSTM:_seq_updateOutput(input)
 
 	local output = {}
 
-	-- ensure cell and output are ready for the first step
-	-- set batch size and prepare the cell and output
-	local _nIdim = input[1]:nDimension()
-	if _nIdim>1 then
-		self.batchsize = input[1]:size(1)
+	self:_prepare_data(input[1])
 
-		-- if need start from last state of the previous sequence
-		if self.rememberState and self.lastCell then
-			if self.lastCell:size(1) == self.batchsize then
-				self.cell0 = self.lastCell
-				self.output0 = self.lastOutput
-			else
-				self.cell0 = self.lastCell:narrow(1, 1, self.batchsize)
-				self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
-			end
-		else
-			self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
-			self.cell0 = self.cell0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
-			self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
-			self.output0 = self.output0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
-		end
-
-		-- narrow dimension
-		self.narrowDim = _nIdim
-	else
-		self.batchsize = nil
-
-		if self.rememberState and self.lastCell then
-			self.cell0 = self.lastCell
-			self.output0 = self.lastOutput
-		else
-			self.cell0 = self.sbm.bias:narrow(1, 1, self.outputSize)
-			self.output0 = self.sbm.bias:narrow(1, self.fgstartid, self.outputSize)
-		end
-
-		-- narrow dimension
-		self.narrowDim = 1
-	end
 	self.cell = self.cell0
 	local _output = self.output0
 
