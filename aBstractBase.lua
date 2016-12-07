@@ -5,7 +5,7 @@
 
 	This scripts implement an aBstractBase for RNN:
 
-	Version 0.0.2
+	Version 0.1.0
 
 ]]
 
@@ -15,6 +15,13 @@ local aBstractBase, parent = torch.class('nn.aBstractBase', 'nn.Container')
 function aBstractBase:__init()
 
 	parent.__init(self)
+
+end
+
+function aBstractBase:_clearTunnel()
+
+	self.memTCopy = nil
+	self.gradTCopy = nil
 
 end
 
@@ -58,6 +65,8 @@ function aBstractBase:evaluate()
 
 	self:forget()
 
+	self:_clearTunnel()
+
 end
 
 -- train
@@ -70,6 +79,8 @@ function aBstractBase:training()
 	end
 
 	self:forget()
+
+	self:_clearTunnel()
 
 end
 
@@ -96,6 +107,33 @@ function aBstractBase:_ApplyReset(stdv)
 
 	for _, module in ipairs(self.modules) do
 		module:reset(stdv)
+	end
+
+end
+
+
+-- copy previous output and cell etc from encoder to decoder
+function aBstractBase:_copy_forward(fromodel, tomodel)
+
+	for _ = 1, fromodel:size() do
+		local crfm = fromodel:get(_)
+		if torch.isTypeOf(crfm, 'nn.aBstractBase') then
+			local tarm = tomodel:get(_)
+			tarm:_Copy(fromodel.memTCopy, true)
+		end
+	end
+
+end
+
+-- copy gradient to output and cell etc from decoder to encoder
+function aBstractBase:_copy_backward(fromodel, tomodel)
+
+	for _ = 1, fromodel:size() do
+		local crfm = fromodel:get(_)
+		if torch.isTypeOf(crfm, 'nn.aBstractBase') then
+			local tarm = tomodel:get(_)
+			tarm:_Copy(fromodel.gradTCopy)
+		end
 	end
 
 end
