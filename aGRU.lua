@@ -10,7 +10,7 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.1.3
+	Version 0.1.4
 
 ]]
 
@@ -695,12 +695,14 @@ end]]
 -- accGradParameters used for aGRU.bias
 function aGRU:_accGradParameters(scale)
 
-	scale = scale or 1
-	if self.batchsize then
-		self._gLOutput = self._gLOutput:sum(1)
-		self._gLOutput:resize(self.outputSize)
+	if self._gLOutput then
+		scale = scale or 1
+		if self.batchsize then
+			self._gLOutput = self._gLOutput:sum(1)
+			self._gLOutput:resize(self.outputSize)
+		end
+		self.sbm.gradBias:add(scale, self._gLOutput)
 	end
-	self.sbm.gradBias:add(scale, self._gLOutput)
 
 end
 
@@ -824,7 +826,9 @@ function aGRU:reset(stdv)
 	so the default method could be done correctly]]
 	self.modules = {self.ifgate, self.hmod, self.sbm}
 
-	self:_ApplyReset(stdv)
+	if stdv then
+		self:_ApplyReset(stdv)
+	end
 
 	self:forget()
 
