@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.2.1
+	Version 0.2.2
 
 ]]
 
@@ -783,15 +783,17 @@ end]]
 -- accGradParameters used for aLSTM.bias
 function aLSTM:_accGradParameters(scale)
 
-	scale = scale or 1
-	if self.batchsize then
-		self._gLCell = self._gLCell:sum(1)
-		self._gLCell:resize(self.outputSize)
-		self._gLOutput = self._gLOutput:sum(1)
-		self._gLOutput:resize(self.outputSize)
+	if self._gLOutput then
+		scale = scale or 1
+		if self.batchsize then
+			self._gLCell = self._gLCell:sum(1)
+			self._gLCell:resize(self.outputSize)
+			self._gLOutput = self._gLOutput:sum(1)
+			self._gLOutput:resize(self.outputSize)
+		end
+		self.sbm.gradBias:narrow(1,1,self.outputSize):add(scale, self._gLCell)
+		self.sbm.gradBias:narrow(1,self.fgstartid,self.outputSize):add(scale, self._gLOutput)
 	end
-	self.sbm.gradBias:narrow(1,1,self.outputSize):add(scale, self._gLCell)
-	self.sbm.gradBias:narrow(1,self.fgstartid,self.outputSize):add(scale, self._gLOutput)
 
 end
 
@@ -937,7 +939,9 @@ function aLSTM:reset(stdv)
 	so the default method could be done correctly]]
 	self.modules = {self.ifgate, self.zmod, self.ogate, self.sbm, self.tanh}
 
-	self:_ApplyReset(stdv)
+	if stdv then
+		self:_ApplyReset(stdv)
+	end
 
 	self:forget()
 
