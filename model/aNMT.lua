@@ -5,11 +5,11 @@
 
 	This scripts implement an NMT for RNN:
 
-	Version 0.0.2
+	Version 0.0.3
 
 ]]
 
-local aNMT, parent = torch.class('nn.aBstractBase', 'nn.aBstractNMT')
+local aNMT, parent = torch.class('nn.aNMT', 'nn.aBstractNMT')
 
 -- generate a module
 function aNMT:__init(encoder, decoder, attention, lookup, classifier, eosid, target_Length)
