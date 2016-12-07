@@ -5,7 +5,7 @@
 
 	This scripts implement an aBstractBase for RNN:
 
-	Version 0.1.0
+	Version 0.1.1
 
 ]]
 
@@ -18,10 +18,18 @@ function aBstractBase:__init()
 
 end
 
-function aBstractBase:_clearTunnel()
+function aBstractBase:_clearTunnel(clear_who)
 
-	self.memTCopy = nil
-	self.gradTCopy = nil
+	if clear_who then
+		if clear_who == "forward" then
+			self.memTCopy = nil-- table to keep the newest memory like:output and cell etc
+		else
+			self.gradTCopy = nil-- table to keep gradient to the memory like:output and cell etc
+		end
+	else
+		self.memTCopy = nil
+		self.gradTCopy = nil
+	end
 
 end
 
@@ -110,7 +118,6 @@ function aBstractBase:_ApplyReset(stdv)
 	end
 
 end
-
 
 -- copy previous output and cell etc from encoder to decoder
 function aBstractBase:_copy_forward(fromodel, tomodel)
