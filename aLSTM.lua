@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.2.2
+	Version 0.3.0
 
 ]]
 
@@ -20,7 +20,7 @@ local aLSTM, parent = torch.class('nn.aLSTM', 'nn.aBstractSeq')
 --local aLSTM, parent = torch.class('nn.aLSTM', 'nn.aBstractStep')
 
 -- generate a module
-function aLSTM:__init(inputSize, outputSize, maskZero, remember)
+function aLSTM:__init(inputSize, outputSize, maskZero, remember, needcopyForward, needcopyBackward)
 
 	parent.__init(self)
 
@@ -54,6 +54,9 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember)
 
 	self.narrowDim = 1
 
+	self.needcopyForward = needcopyForward
+	self.needcopyBackward = needcopyBackward
+
 	self:reset()
 
 end
@@ -77,7 +80,7 @@ end]]
 -- prepare data for the first step
 function aLSTM:_prepare_data(input)
 
--- set batch size and prepare the cell and output
+	-- set batch size and prepare the cell and output
 		local _nIdim = input:nDimension()
 		if _nIdim>1 then
 			self.batchsize = input:size(1)
@@ -115,6 +118,19 @@ function aLSTM:_prepare_data(input)
 			-- narrow dimension
 			self.narrowDim = 1
 		end
+
+end
+
+-- apply value copied
+function aLSTM:_Copy(data, isForwardCopy)
+
+	if isForwardCopy then
+		self.output = data[1]
+		self.cell = data[2]
+	else
+		self._gLOutput = data[1]
+		self.__gLCell = data[2]
+	end
 
 end
 
@@ -161,6 +177,10 @@ function aLSTM:_step_updateOutput(input)
 		table.insert(self.otanh, _otanh)
 		table.insert(self.ofgate, _fgo)
 		table.insert(self.ougate, _zo)
+	end
+
+	if self.needcopyForward then
+		self.memTCopy = {self.output, self.cell}
 	end
 
 	-- return the output for this input
@@ -236,6 +256,10 @@ function aLSTM:_tseq_updateOutput(input)
 
 	end
 
+	if self.needcopyForward then
+		self.memTCopy = {_output, self.cell}
+	end
+
 	return self.output
 
 end
@@ -288,6 +312,10 @@ function aLSTM:_seq_updateOutput(input)
 			table.insert(self.oogate, _ogo)--o[t]
 		end
 
+	end
+
+	if self.needcopyForward then
+		self.memTCopy = {_output, self.cell}
 	end
 
 	--[[for _,v in ipairs(input) do
@@ -784,6 +812,11 @@ end]]
 function aLSTM:_accGradParameters(scale)
 
 	if self._gLOutput then
+
+		if self.needcopyBackward then
+			self.gradTCopy = {self._gLOutput:clone(), self._gCell:clone()}
+		end
+
 		scale = scale or 1
 		if self.batchsize then
 			self._gLCell = self._gLCell:sum(1)
@@ -793,6 +826,7 @@ function aLSTM:_accGradParameters(scale)
 		end
 		self.sbm.gradBias:narrow(1,1,self.outputSize):add(scale, self._gLCell)
 		self.sbm.gradBias:narrow(1,self.fgstartid,self.outputSize):add(scale, self._gLOutput)
+
 	end
 
 end
