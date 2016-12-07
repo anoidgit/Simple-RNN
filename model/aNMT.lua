@@ -44,10 +44,12 @@ function aNMT:_seq_updateOutput(input)
 		self:_copy_forward(encoder, decoder)
 
 		-- prepare the whole sequence
+		local _cPrevOutput = self._encoded[-1]-- still problem here
 		for _, v in tar do
-			local odecoder = self.decoder:updateOutput(v)
+			local odecoder = self.decoder:updateOutput(_cPrevOutput)
 			local oattention = self.attention:updateOutput({self._encoded, odecoder})
-			local oclassify = self.classifier:updateOutput(oattention)
+			_cPrevOutput = torch.cat(odecoder, oattention)
+			local oclassify = self.classifier:updateOutput(_cPrevOutput)
 			table.insert(_output, oclassify)
 			table.insert(self.oattention, oattention)
 			table.insert(self.odecoder, odecoder)
