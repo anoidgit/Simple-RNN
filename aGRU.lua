@@ -10,7 +10,7 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.1.4
+	Version 0.2.0
 
 ]]
 
@@ -18,7 +18,7 @@ local aGRU, parent = torch.class('nn.aGRU', 'nn.aBstractSeq')
 --local aGRU, parent = torch.class('nn.aGRU', 'nn.aBstractStep')
 
 -- generate a module
-function aGRU:__init(inputSize, outputSize, maskZero, remember)
+function aGRU:__init(inputSize, outputSize, maskZero, remember, needcopyForward, needcopyBackward)
 
 	parent.__init(self)
 
@@ -52,6 +52,9 @@ function aGRU:__init(inputSize, outputSize, maskZero, remember)
 
 	self.narrowDim = 1
 
+	self.needcopyForward = needcopyForward
+	self.needcopyBackward = needcopyBackward
+
 	self:reset()
 
 end
@@ -71,6 +74,16 @@ end
 	self.updateGradInput = self._seq_updateGradInput
 
 end]]
+
+function aGRU:_Copy(data, isForwardCopy)
+
+	if isForwardCopy then
+		self.output = data[1]
+	else
+		self._gLOutput = data[1]
+	end
+
+end
 
 -- prepare data for the first step
 function aGRU:_prepare_data(input)
@@ -152,6 +165,10 @@ function aGRU:_step_updateOutput(input)
 		table.insert(self.ro, _ro)-- reset output
 	end
 
+	if self.needcopyForward then
+		self.memTCopy = {self.output}
+	end
+
 	-- return the output for this input
 	return self.output
 
@@ -219,6 +236,10 @@ function aGRU:_tseq_updateOutput(input)
 
 	end
 
+	if self.needcopyForward then
+		self.memTCopy = {_output}
+	end
+
 	return self.output
 
 end
@@ -266,6 +287,10 @@ function aGRU:_seq_updateOutput(input)
 			table.insert(self.ro, _ro)-- reset output
 		end
 
+	end
+
+	if self.needcopyForward then
+		self.memTCopy = {_output}
 	end
 
 	--[[for _,v in ipairs(input) do
@@ -696,6 +721,11 @@ end]]
 function aGRU:_accGradParameters(scale)
 
 	if self._gLOutput then
+
+		if self.needcopyBackward then
+			self.gradTCopy = {self._gLOutput:clone()}
+		end
+
 		scale = scale or 1
 		if self.batchsize then
 			self._gLOutput = self._gLOutput:sum(1)
