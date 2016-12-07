@@ -5,7 +5,7 @@
 
 	This scripts implement an NMT for RNN:
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
@@ -24,6 +24,8 @@ function aNMT:__init(encoder, decoder, attention, lookup, classifier, eosid, tar
 	self.eosid = eosid
 	self.glength = target_Length or 256
 
+	self.modules = {self.encoder, self.decoder, self.attention, self.classifier}
+
 end
 
 function aNMT:_seq_updateOutput(input)
@@ -38,7 +40,8 @@ function aNMT:_seq_updateOutput(input)
 
 		-- encode the whole sequence
 		self._encoded = self:_tranTable(self.encoder:updateOutput(src))
-		self:_copy_memory()
+
+		self:_copy_forward(encoder, decoder)
 
 		-- prepare the whole sequence
 		for _, v in tar do
@@ -54,7 +57,8 @@ function aNMT:_seq_updateOutput(input)
 
 		-- encode the whole sequence
 		self._encoded = self:_tranTable(self.encoder:updateOutput(input))
-		self:_copy_forward()
+
+		self:_copy_forward(encoder, decoder)
 
 		local oclassify = self:_prepare_data(input[1])
 		local _length = 1
@@ -84,6 +88,7 @@ function aNMT:_seq_backward(input, gradOutput, scale)
 
 	-- backward the decoder
 	local _gEncoder, _gDecoder, __gEncoder
+	local _gInput
 	for _ = #tar, 1, -1 do
 
 		local _cAttention = table.remove(self.oattention)
@@ -91,8 +96,11 @@ function aNMT:_seq_backward(input, gradOutput, scale)
 		local _cGrad = table.remove(gradOutput)
 		local _cInput = table.remove(tar)
 
-		if self._gLOutput then
-			_cGrad:add(self._gLOutput)
+		if _gInput then
+			_cGrad:add(_gInput)
+		end
+
+		if _gEncoder then
 			__gEncoder, _gDecoder = self.attention:backward({self._encoded, _cDecoder}, )
 			_gEncoder:add(__gEncoder)
 		else
@@ -109,20 +117,10 @@ function aNMT:_seq_backward(input, gradOutput, scale)
 
 	tGradInput[1] = _gInput
 
-	self:_copy_backward()
+	self:_copy_backward(decoder, encoder)
 
 	local sGradInput = self.encoder:backward(src, self:_tranTensor(_gEncoder), scale)
 
 	return {sGradInput, tGradInput}
-
-end
-
--- copy previous output and cell etc from encoder to decoder
-function aNMT:_copy_forward()
-
-end
-
--- copy gradient to output and cell etc from decoder to encoder
-function aNMT:_copy_backward()
 
 end
