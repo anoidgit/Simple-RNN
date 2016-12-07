@@ -10,7 +10,7 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.1.1
+	Version 0.1.3
 
 ]]
 
@@ -72,45 +72,54 @@ end
 
 end]]
 
+-- prepare data for the first step
+function aGRU:_prepare_data(input)
+
+	-- set batch size and prepare the output
+	local _nIdim = input:nDimension()
+	if _nIdim > 1 then
+
+		self.batchsize = input:size(1)
+
+		if self.rememberState and self.lastOutput then
+			if self.lastOutput:size(1) == self.batchsize then
+				self.output0 = self.lastOutput
+			else
+				self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
+			end
+		else
+			self.output0 = self.sbm.bias
+			self.output0 = self.output0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
+		end
+
+		-- narrow dimension
+		self.narrowDim = _nIdim
+
+	else
+
+		self.batchsize = nil
+
+		if self.rememberState and self.lastOutput then
+			self.output0 = self.lastOutput
+		else
+			self.output0 = self.sbm.bias
+		end
+
+		-- narrow dimension
+		self.narrowDim = 1
+
+	end
+
+end
+
 -- updateOutput called by forward,
 -- It input a time step's input and produce an output
 function aGRU:_step_updateOutput(input)
 
 	-- ensure output are ready for the first step
 	if not self.output then
-		-- set batch size and prepare the output
-		local _nIdim = input:nDimension()
-		if _nIdim > 1 then
-			self.batchsize = input:size(1)
 
-			if self.rememberState and self.lastOutput then
-				if self.lastOutput:size(1) == self.batchsize then
-					self.output0 = self.lastOutput
-				else
-					self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
-				end
-			else
-				self.output0 = self.sbm.bias
-				self.output0 = self.output0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
-			end
-
-			-- narrow dimension
-			self.narrowDim = _nIdim
-
-		else
-
-			self.batchsize = nil
-
-			if self.rememberState and self.lastOutput then
-				self.output0 = self.lastOutput
-			else
-				self.output0 = self.sbm.bias
-			end
-
-			-- narrow dimension
-			self.narrowDim = 1
-
-		end
+		self:_prepare_data(input)
 
 		self.output = self.output0
 	end
@@ -172,41 +181,7 @@ function aGRU:_tseq_updateOutput(input)
 
 	end
 
-	-- ensure output are ready for the first step
-	-- set batch size and prepare the cell and output
-	local _nIdim = input[1]:nDimension()
-	if _nIdim > 1 then
-		self.batchsize = input[1]:size(1)
-
-		-- if need start from last state of the previous sequence
-		if self.rememberState and self.lastOutput then
-			if self.lastOutput:size(1) == self.batchsize then
-				self.output0 = self.lastOutput
-			else
-				self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
-			end
-		else
-			self.output0 = self.sbm.bias
-			self.output0 = self.output0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
-		end
-
-		-- narrow dimension
-		self.narrowDim = _nIdim
-
-	else
-
-		self.batchsize = nil
-
-		if self.rememberState and self.lastOutput then
-			self.output0 = self.lastOutput
-		else
-			self.output0 = self.sbm.bias
-		end
-
-		-- narrow dimension
-		self.narrowDim = 1
-
-	end
+	self:_prepare_data(input[1])
 
 	local _output = self.output0
 
@@ -255,41 +230,7 @@ function aGRU:_seq_updateOutput(input)
 
 	local output = {}
 
-	-- ensure output are ready for the first step
-	-- set batch size and prepare the cell and output
-	local _nIdim = input[1]:nDimension()
-	if _nIdim > 1 then
-		self.batchsize = input[1]:size(1)
-
-		-- if need start from last state of the previous sequence
-		if self.rememberState and self.lastOutput then
-			if self.lastOutput:size(1) == self.batchsize then
-				self.output0 = self.lastOutput
-			else
-				self.output0 = self.lastOutput:narrow(1, 1, self.batchsize)
-			end
-		else
-			self.output0 = self.sbm.bias
-			self.output0 = self.output0:reshape(1,self.outputSize):expand(self.batchsize, self.outputSize)
-		end
-
-		-- narrow dimension
-		self.narrowDim = _nIdim
-
-	else
-
-		self.batchsize = nil
-
-		if self.rememberState and self.lastOutput then
-			self.output0 = self.lastOutput
-		else
-			self.output0 = self.sbm.bias
-		end
-
-		-- narrow dimension
-		self.narrowDim = 1
-
-	end
+	self:_prepare_data(input[1])
 
 	local _output = self.output0
 
@@ -655,7 +596,7 @@ function aGRU:_tseq_backward(input, gradOutput, scale)
 			_cGradOut:add(self._gLOutput)
 		end
 
-		_cInput = _input[_t]-- current input
+		_cInput = input[_t]-- current input
 
 		if _t > 1 then
 			_cPrevOutput = self.output[_t - 1]-- previous output
