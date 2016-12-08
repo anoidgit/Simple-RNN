@@ -5,7 +5,7 @@
 
 	This scripts defines the NMT model to train
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
@@ -56,6 +56,8 @@ function getonn()
 end
 
 function getnnn()
+
+	require "nnsettings"
 
 	local id2vec = nn.maskZerovecLookup(wvec);
 	wvec = nil
