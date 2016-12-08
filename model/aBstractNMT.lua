@@ -5,7 +5,7 @@
 
 	This scripts implement an aBstractNMT for RNN:
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
@@ -15,22 +15,6 @@ local aBstractNMT, parent = torch.class('nn.aBstractNMT', 'nn.aBstractBase')
 function aBstractNMT:__init()
 
 	parent.__init(self)
-
-end
-
-function aBstractNMT:_prepare_data(input)
-
-	local _iSize = input:size()
-	self.state = input.new()
-	if _iSize > 1 then
-		self.state:resize(_iSize[1])
-	else
-		self.state:resize(1)
-	end
-	self.state:zero()
-	local eosi = self.state:clone():fill(self.eosid)
-
-	return self.lookup:updateOutput(eosi)
 
 end
 
