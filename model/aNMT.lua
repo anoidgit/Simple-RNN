@@ -5,14 +5,14 @@
 
 	This scripts implement an NMT for RNN:
 
-	Version 0.0.3
+	Version 0.0.4
 
 ]]
 
 local aNMT, parent = torch.class('nn.aNMT', 'nn.aBstractNMT')
 
 -- generate a module
-function aNMT:__init(encoder, decoder, attention, lookup, classifier, eosid, target_Length)
+function aNMT:__init(encoder, decoder, attention, lookup, classifier, eosid, max_Target_Length, evaOTag)
 
 	parent.__init(self)
 
@@ -22,60 +22,60 @@ function aNMT:__init(encoder, decoder, attention, lookup, classifier, eosid, tar
 	self.lookup = lookup
 	self.classifier = classifier
 	self.eosid = eosid
-	self.glength = target_Length or 256
+	self.maxLength = max_Target_Length or 256
+	self.evaOTag = evaOTag
 
-	self.modules = {self.encoder, self.decoder, self.attention, self.classifier}
+	self.modules = {self.encoder, self.decoder, self.attention}
 
 end
 
 function aNMT:_seq_updateOutput(input)
 
+	-- get source and target
+	local src = input[1]
+	local tar = input[2]
+
+	-- encode the whole sequence
+	self._encoded = self:_tranTable(self.encoder:updateOutput(input))
+
+	self:_copy_forward(encoder, decoder)
+
+	-- prepare the whole sequence
+	local _cOutput = self._encoded[-1]
+	local _cAttention = self.attention:updateOutput({self._encoded, _cOutput})
+	self._initInput = torch.cat(_cOutput, _cAttention)
+	local _nInput = self._initInput
+
 	local _output = {}-- store the result
 
 	if self.train then
 
-		-- get source and target
-		local src = input[1]
-		local tar = input[2]
-
-		-- encode the whole sequence
-		self._encoded = self:_tranTable(self.encoder:updateOutput(src))
-
-		self:_copy_forward(encoder, decoder)
-
-		-- prepare the whole sequence
-		local _cPrevOutput = self._encoded[-1]-- still problem here
-		for _, v in tar do
-			local odecoder = self.decoder:updateOutput(_cPrevOutput)
-			local oattention = self.attention:updateOutput({self._encoded, odecoder})
-			_cPrevOutput = torch.cat(odecoder, oattention)
-			local oclassify = self.classifier:updateOutput(_cPrevOutput)
-			table.insert(_output, oclassify)
-			table.insert(self.oattention, oattention)
-			table.insert(self.odecoder, odecoder)
+		for _ = 1, #tar do
+			_cOutput = self.decoder:updateOutput(_nInput)
+			_cAttention = self.attention:updateOutput({self._encoded, _cOutput})
+			_nInput = torch.cat(_cOutput, _cAttention)
+			table.insert(_output, _nInput)
 		end
 
 	else
 
-		-- encode the whole sequence
-		self._encoded = self:_tranTable(self.encoder:updateOutput(input))
-
-		self:_copy_forward(encoder, decoder)
-
-		local oclassify = self:_prepare_data(input[1])
 		local _length = 1
-		while not self.state:all() do
-			oclassify = self.classifier:updateOutput(self.attention:updateOutput(self.decoder:updateOutput(self.lookup:updateOutput(oclassify))))
-			table.insert(_output, oclassify)
-			self:_updateState(oclassify)
-			if _length > self.glength then
-				break
-			end
+		while not self.state:all() and _length < self.maxLength do
+			_cOutput = self.decoder:updateOutput(_nInput)
+			_cAttention = self.attention:updateOutput({self._encoded, _cOutput})
+			_nInput = torch.cat(_cOutput, _cAttention)
+			local _rs = self.classifier:updateOutput(_nInput)
+			self:_updateState(_rs)
 			_length = _length + 1
+			if self.evaOTag then
+				table.insert(_output, _rs)
+			else
+				table.insert(_output, _nInput)
+			end
 		end
 	end
 
-	self.output = output
+	self.output = _output
 
 	return self.output
 
