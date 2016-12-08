@@ -7,7 +7,7 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.3
+	Version 0.0.5
 
 ]]
 
@@ -88,12 +88,12 @@ function aTtention:updateOutput(input)
 	if self.train then
 		table.insert(self._score, score)
 	end
-	self.output = torch.cmul(score, src):sum(1)-- 1(*batchsize)*vecsize
+	local output = torch.cmul(score, src):sum(1)-- 1(*batchsize)*vecsize
 	if ndim == 3 then
 		batchsize = _iSize[2]
-		self.output = self.output:reshape(batchsize, self.vecsize)-- batchsize*vecsize
+		self.output = output:reshape(batchsize, self.vecsize)-- batchsize*vecsize
 	else
-		self.output = self.output:reshape(self.vecsize) 
+		self.output = output:reshape(self.vecsize) 
 	end
 
 	return self.output
