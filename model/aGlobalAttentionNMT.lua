@@ -5,14 +5,14 @@
 
 	This scripts implement an NMT for RNN:
 
-	Version 0.0.5
+	Version 0.0.6
 
 ]]
 
-local aNMT, parent = torch.class('nn.aNMT', 'nn.aBstractNMT')
+local aGlobalAttentionNMT, parent = torch.class('nn.aGlobalAttentionNMT', 'nn.aBstractNMT')
 
 -- generate a module
-function aNMT:__init(encoder, decoder, attention, classifier, eosid, max_Target_Length, evaOTag)
+function aGlobalAttentionNMT:__init(encoder, decoder, attention, classifier, eosid, max_Target_Length, evaOTag)
 
 	parent.__init(self)
 
@@ -28,7 +28,7 @@ function aNMT:__init(encoder, decoder, attention, classifier, eosid, max_Target_
 
 end
 
-function aNMT:_seq_updateOutput(input)
+function aGlobalAttentionNMT:_seq_updateOutput(input)
 
 	-- get source and target
 	local src = input[1]
@@ -80,7 +80,7 @@ function aNMT:_seq_updateOutput(input)
 
 end
 
-function aNMT:_seq_backward(input, gradOutput, scale)
+function aGlobalAttentionNMT:_seq_backward(input, gradOutput, scale)
 
 	local src = input[1]
 	local tar = input[2]
@@ -90,6 +90,8 @@ function aNMT:_seq_backward(input, gradOutput, scale)
 	local _cOutput = table.remove(self.output)[1]
 
 	local _gLOutput, _gLAttention
+
+	local __gEncoder, _gOutput
 
 	for _ = #tar, 1, -1 do
 
@@ -108,7 +110,7 @@ function aNMT:_seq_backward(input, gradOutput, scale)
 			_cGradAttention:add(_gLAttention)
 		end
 
-		local __gEncoder, _gOutput = self.attention:backward({self.encoded, _cOutput}, _cGradAttention, scale)
+		__gEncoder, _gOutput = self.attention:backward({self.encoded, _cOutput}, _cGradAttention, scale)
 
 		if _gEncoder then
 			_gEncoder:add(__gEncoder)
@@ -124,12 +126,20 @@ function aNMT:_seq_backward(input, gradOutput, scale)
 
 	end
 
-	_gEncoder[-1]:add(_gLOutput)
+	local __gEncoder, _gOutput = self.attention:backward(self._initInput, _gLAttention, scale)
+
+	if _gEncoder then
+		_gEncoder:add(__gEncoder)
+	else
+		_gEncoder = __gEncoder
+	end
+
+	_gEncoder[-1]:add(_gLOutput):add(_gOutput)
 
 	self:_copy_backward(decoder, encoder)
 
-	local sGradInput = self.encoder:backward(src, self:_tranTensor(_gEncoder), scale)
+	self.gradInput = {self.encoder:backward(src, self:_tranTensor(_gEncoder), scale)}
 
-	return {sGradInput}
+	return self.gradInput
 
 end
