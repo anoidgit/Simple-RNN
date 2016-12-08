@@ -10,7 +10,7 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.2.0
+	Version 0.2.1
 
 ]]
 
@@ -158,7 +158,7 @@ function aGRU:_step_updateOutput(input)
 
 	-- if training, remember what should remember
 	if self.train then
-		table.insert(self._output, self.output)--h[t]
+		table.insert(self.outputs, self.output)--h[t]
 		table.insert(self.oifgate, _ifgo)--if[t], input and forget
 		table.insert(self.ohid, _ho)-- h[t]
 		table.insert(self.oigr, _igr)-- 1-z[t]
@@ -280,7 +280,7 @@ function aGRU:_seq_updateOutput(input)
 
 		-- if training, remember what should remember
 		if self.train then
-			--table.insert(self._output, _output)--h[t]
+			--table.insert(self.outputs, _output)--h[t]
 			table.insert(self.oifgate, _ifgo)--if[t], input and forget
 			table.insert(self.ohid, _ho)-- h[t]
 			table.insert(self.oigr, _igr)-- 1-z[t]
@@ -300,11 +300,11 @@ function aGRU:_seq_updateOutput(input)
 	-- this have conflict with _step_updateOutput,
 	-- but anyhow do not use them at the same time
 	self.output = output
-	self._output = output
+	self.outputs = output
 
 	--[[if self.train then
 		self:_check_table_same(self._cell)
-		self:_check_table_same(self._output)
+		self:_check_table_same(self.outputs)
 		self:_check_table_same(self.otanh)
 		self:_check_table_same(self.oifgate)
 		self:_check_table_same(self.ohid)
@@ -364,7 +364,7 @@ function aGRU:_step_backward(input, gradOutput, scale)
 	else
 
 		-- remove the last output, because it was never used
-		local _lastOutput = table.remove(self._output)
+		local _lastOutput = table.remove(self.outputs)
 
 		-- remember the end of sequence for next input use
 		if self.rememberState then
@@ -373,8 +373,8 @@ function aGRU:_step_backward(input, gradOutput, scale)
 
 	end
 
-	if #self._output > 0 then
-		_cPrevOutput = table.remove(self._output)-- previous output
+	if #self.outputs > 0 then
+		_cPrevOutput = table.remove(self.outputs)-- previous output
 	else
 		_cPrevOutput = self.output0
 		nfirstep = false
@@ -469,7 +469,7 @@ function aGRU:_seq_backward(input, gradOutput, scale)
 	local gradInput = {}
 
 	-- remove the last output, because it was never used
-	local _lastOutput = table.remove(self._output)
+	local _lastOutput = table.remove(self.outputs)
 
 	-- remember the end of sequence for next input use
 	if self.rememberState then
@@ -499,7 +499,7 @@ function aGRU:_seq_backward(input, gradOutput, scale)
 		_cInput = table.remove(_input)-- current input
 
 		if _t > 1 then
-			_cPrevOutput = table.remove(self._output)-- previous output, s[t-1]
+			_cPrevOutput = table.remove(self.outputs)-- previous output, s[t-1]
 		else
 			_cPrevOutput = self.output0
 		end
@@ -749,9 +749,9 @@ function aGRU:_tensor_clearState(tsr)
 	end
 
 	-- last output
-	-- here switch the usage of self.output and self._output for fit the standard of nn.Module
-	-- just point self._output to keep aGRU standard
-	self._output = self.output
+	-- here switch the usage of self.output and self.outputs for fit the standard of nn.Module
+	-- just point self.outputs to keep aGRU standard
+	self.outputs = self.output
 
 	-- gradInput sequence
 	if not self.gradInput then
@@ -797,7 +797,7 @@ end
 function aGRU:_table_clearState()
 
 	-- output sequence
-	self._output = {}
+	self.outputs = {}
 	-- last output
 	self.output = nil
 	-- gradInput sequence
