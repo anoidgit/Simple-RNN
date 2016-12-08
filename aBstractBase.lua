@@ -5,7 +5,7 @@
 
 	This scripts implement an aBstractBase for RNN:
 
-	Version 0.1.1
+	Version 0.1.2
 
 ]]
 
@@ -16,6 +16,11 @@ function aBstractBase:__init()
 
 	parent.__init(self)
 
+end
+
+-- apply value copied
+-- do nothing, leave this implementation to child
+function aBstractBase:_Copy(data, isForwardCopy)
 end
 
 function aBstractBase:_clearTunnel(clear_who)
