@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.3.0
+	Version 0.3.1
 
 ]]
 
@@ -172,8 +172,8 @@ function aLSTM:_step_updateOutput(input)
 
 	-- if training, remember what should remember
 	if self.train then
-		table.insert(self._cell, self.cell)
-		table.insert(self._output, self.output)
+		table.insert(self.cells, self.cell)
+		table.insert(self.outputs, self.output)
 		table.insert(self.otanh, _otanh)
 		table.insert(self.ofgate, _fgo)
 		table.insert(self.ougate, _zo)
@@ -203,7 +203,7 @@ function aLSTM:_tseq_updateOutput(input)
 
 	if self.train then
 
-		self._cell:resize(oSize)
+		self.cells:resize(oSize)
 		self.otanh:resize(oSize)
 		self.oogate:resize(oSize)
 		self.ohid:resize(oSize)
@@ -247,7 +247,7 @@ function aLSTM:_tseq_updateOutput(input)
 
 		-- if training, remember what should remember
 		if self.train then
-			self._cell[_t]:copy(self.cell)--c[t]
+			self.cells[_t]:copy(self.cell)--c[t]
 			self.otanh[_t]:copy(_otanh)--tanh[t]
 			self.oifgate[_t]:copy(_ifgo)--if[t], input and forget
 			self.ohid[_t]:copy(_zo)--z[t]
@@ -304,8 +304,8 @@ function aLSTM:_seq_updateOutput(input)
 
 		-- if training, remember what should remember
 		if self.train then
-			table.insert(self._cell, self.cell)--c[t]
-			--table.insert(self._output, _output)--h[t]
+			table.insert(self.cells, self.cell)--c[t]
+			--table.insert(self.outputs, _output)--h[t]
 			table.insert(self.otanh, _otanh)--tanh[t]
 			table.insert(self.oifgate, _ifgo)--if[t], input and forget
 			table.insert(self.ohid, _zo)--z[t]
@@ -325,11 +325,11 @@ function aLSTM:_seq_updateOutput(input)
 	-- this have conflict with _step_updateOutput,
 	-- but anyhow do not use them at the same time
 	self.output = output
-	self._output = output
+	self.outputs = output
 
 	--[[if self.train then
-		self:_check_table_same(self._cell)
-		self:_check_table_same(self._output)
+		self:_check_table_same(self.cells)
+		self:_check_table_same(self.outputs)
 		self:_check_table_same(self.otanh)
 		self:_check_table_same(self.oifgate)
 		self:_check_table_same(self.ohid)
@@ -389,10 +389,10 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 	else
 
 		-- remove the last output
-		local _lastOutput = table.remove(self._output)
+		local _lastOutput = table.remove(self.outputs)
 		-- get current cell,
 		-- it will be used will backward output gate
-		self.cell = table.remove(self._cell)
+		self.cell = table.remove(self.cells)
 
 		-- if need to remember to use for the next sequence
 		if self.rememberState then
@@ -402,9 +402,9 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 
 	end
 
-	if #self._output > 0 then
-		_cPrevOutput = table.remove(self._output)-- previous output
-		_cPrevCell = table.remove(self._cell)-- previous cell
+	if #self.outputs > 0 then
+		_cPrevOutput = table.remove(self.outputs)-- previous output
+		_cPrevCell = table.remove(self.cells)-- previous cell
 	else
 		_cPrevOutput = self.output0
 		_cPrevCell = self.cell0
@@ -514,10 +514,10 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 	local gradInput = {}
 
 	-- remove the last output, because it was never used
-	local _lastOutput = table.remove(self._output)
+	local _lastOutput = table.remove(self.outputs)
 	-- get current cell,
 	-- it will be used will backward output gate
-	self.cell = table.remove(self._cell)--c[t]
+	self.cell = table.remove(self.cells)--c[t]
 
 	-- remember the end of sequence for next input use
 	if self.rememberState then
@@ -547,8 +547,8 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 
 		_cInput = table.remove(_input)-- current input
 		if _t>1 then
-			_cPrevOutput = table.remove(self._output)-- previous output
-			_cPrevCell = table.remove(self._cell)-- previous cell
+			_cPrevOutput = table.remove(self.outputs)-- previous output
+			_cPrevCell = table.remove(self.cells)-- previous cell
 		else
 			_cPrevOutput = self.output0
 			_cPrevCell = self.cell0
@@ -665,7 +665,7 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 	local _lastOutput = self.output[_length]
 	-- get current cell,
 	-- it will be used will backward output gate
-	self.cell = self._cell[_length]--c[t]
+	self.cell = self.cells[_length]--c[t]
 
 	-- remember the end of sequence for next input use
 	if self.rememberState then
@@ -698,7 +698,7 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 
 		if _t > 1 then
 			_cPrevOutput = self.output[_t - 1]-- previous output
-			_cPrevCell = self._cell[_t - 1]-- previous cell
+			_cPrevCell = self.cells[_t - 1]-- previous cell
 		else
 			_cPrevOutput = self.output0
 			_cPrevCell = self.cell0
@@ -837,10 +837,10 @@ function aLSTM:_tensor_clearState(tsr)
 	tsr = tsr or self.sbm.bias
 
 	-- cell sequence
-	if not self._cell then
-		self._cell = tsr.new()
+	if not self.cells then
+		self.cells = tsr.new()
 	else
-		self._cell:resize(0)
+		self.cells:resize(0)
 	end
 
 	-- last cell
@@ -854,9 +854,9 @@ function aLSTM:_tensor_clearState(tsr)
 	end
 
 	-- last output
-	-- here switch the usage of self.output and self._output for fit the standard of nn.Module
-	-- just point self._output to keep aLSTM standard
-	self._output = self.output
+	-- here switch the usage of self.output and self.outputs for fit the standard of nn.Module
+	-- just point self.outputs to keep aLSTM standard
+	self.outputs = self.output
 
 	-- gradInput sequence
 	if not self.gradInput then
@@ -903,11 +903,11 @@ end
 function aLSTM:_table_clearState()
 
 	-- cell sequence
-	self._cell = {}
+	self.cells = {}
 	-- last cell
 	self.cell = nil
 	-- output sequence
-	self._output = {}
+	self.outputs = {}
 	-- last output
 	self.output = nil
 	-- gradInput sequence
