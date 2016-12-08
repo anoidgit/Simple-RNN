@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.3.1
+	Version 0.3.2
 
 ]]
 
@@ -987,7 +987,7 @@ function aLSTM:buildIFModule()
 		:add(nn.aConcatTable()
 			:add(nn.aSequential()
 				:add(nn.aNarrowTable(1,2))
-				:add(nn.aJoinTable(self.narrowDim, self.narrowDim, true))
+				:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
 				:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize * 2)))
 			:add(nn.aSequential()
 				:add(nn.aSelectTable(-1))
@@ -1008,7 +1008,7 @@ end
 --[[function aLSTM:buildIFModule()
 
 	local _ifm = nn.aSequential()
-		:add(nn.aJoinTable(self.narrowDim, self.narrowDim, true))
+		:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
 		:add(nn.aLinear(self.inputSize + self.outputSize * 2, self.outputSize * 2))
 		:add(nn.aSigmoid(true))
 
@@ -1023,7 +1023,7 @@ function aLSTM:buildOGModule()
 		:add(nn.aConcatTable()
 			:add(nn.aSequential()
 				:add(nn.aNarrowTable(1,2))
-				:add(nn.aJoinTable(self.narrowDim, self.narrowDim, true))
+				:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
 				:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize)))
 			:add(nn.aSequential()
 				:add(nn.aSelectTable(-1))
@@ -1039,7 +1039,7 @@ end
 --[[function aLSTM:buildOGModule()
 
 	local _ogm = nn.aSequential()
-		:add(nn.aJoinTable(self.narrowDim, self.narrowDim, true))
+		:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
 		:add(nn.aLinear(self.inputSize + self.outputSize * 2, self.outputSize))
 		:add(nn.aSigmoid(true))
 
@@ -1051,7 +1051,7 @@ end]]
 function aLSTM:buildUpdateModule()
 
 	local _um = nn.aSequential()
-		:add(nn.aJoinTable(self.narrowDim, self.narrowDim, true))
+		:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
 		:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize))
 		:add(nn.aTanh(true))
 
