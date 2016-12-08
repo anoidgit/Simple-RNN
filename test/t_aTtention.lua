@@ -6,7 +6,7 @@ batchsize = 4
 vecsize = 4
 
 require "nn"
-require "aSeqBiLinear"
+require "aSeqBiLinearScore"
 require "aTtention"
 require "aSeqSoftMax"
 
@@ -14,7 +14,7 @@ nn.aLinear = nn.Linear
 nn.aSequential = nn.Sequential
 nn.aSoftMax = nn.aSeqSoftMax
 --nn.aSoftMax = nn.SoftMax
-nn.aTranspose = nn.Transpose
+--nn.aTranspose = nn.Transpose
 
 tmod = nn.aTtention(vecsize, true)
 tmod:training()
