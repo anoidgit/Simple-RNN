@@ -7,11 +7,11 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.2
+	Version 0.0.3
 
 ]]
 
-local aTtention = torch.class('nn.aTtention', 'nn.Module')
+local aTtention = torch.class('nn.aTtention', 'nn.Container')
 
 function aTtention:__init(vecsize, reverseOrder)
 
@@ -91,9 +91,9 @@ function aTtention:updateOutput(input)
 	self.output = torch.cmul(score, src):sum(1)-- 1(*batchsize)*vecsize
 	if ndim == 3 then
 		batchsize = _iSize[2]
-		self.output:reshape(batchsize, self.vecsize)-- batchsize*vecsize
+		self.output = self.output:reshape(batchsize, self.vecsize)-- batchsize*vecsize
 	else
-		self.output:reshape(self.vecsize) 
+		self.output = self.output:reshape(self.vecsize) 
 	end
 
 	return self.output
@@ -106,7 +106,7 @@ end
 
 function aTtention:prepare()
 
-	require "aSeqBiLinear"
+	require "aSeqBiLinearScore"
 	nn.aSequential = nn.Sequential
 	nn.aTranspose = nn.Transpose
 	require "aSeqSoftMax"
@@ -117,7 +117,7 @@ end
 function aTtention:reset()
 
 	self.module = nn.Sequential()
-		:add(nn.aSeqBiLinear(self.vecsize, self.rindex==nil))
+		:add(nn.aSeqBiLinearScore(self.vecsize, self.rindex==nil))
 		--:add(nn.aTranspose({1,2}))
 		:add(nn.aSoftMax(self.rindex==nil, true))
 		--:add(nn.aTranspose({1,2}))
