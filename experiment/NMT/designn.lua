@@ -5,7 +5,7 @@
 
 	This scripts defines the NMT model to train
 
-	Version 0.0.2
+	Version 0.0.3
 
 ]]
 
@@ -83,9 +83,11 @@ end
 function buildEncoder()
 
 	local nnmod = nn.Sequential()
+		:add(nn.SeqDropout(pDropout))
 	local inputSize = sizvec
 	for _, hsize in ipairs(hiddenSize) do
 		nnmod:add(nn.aSeqLSTM(inputSize, hsize, true))
+		nnmod:add(nn.Sequencer(nn.NormStabilizer()))
 		inputSize = hsize
 	end
 	return nnmod
@@ -95,9 +97,11 @@ end
 function buildDecoder()
 
 	local nnmod = nn.Sequential()
+		:add(nn.SeqDropout(pDropout))
 	local inputSize = sizvec * 2
 	for _, hsize in ipairs(hiddenSize) do
 		nnmod:add(nn.aStepLSTM(inputSize, hsize, true))
+		nnmod:add(nn.Sequencer(nn.NormStabilizer()))
 		inputSize = hsize
 	end
 	return nnmod
