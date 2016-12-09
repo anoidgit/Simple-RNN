@@ -10,7 +10,7 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.2.1
+	Version 0.2.2
 
 ]]
 
@@ -55,7 +55,8 @@ function aGRU:__init(inputSize, outputSize, maskZero, remember, needcopyForward,
 	self.needcopyForward = needcopyForward
 	self.needcopyBackward = needcopyBackward
 
-	self:reset()
+	--self:reset()
+	self:reset(1.0 / math.sqrt(3 * outputSize))
 
 end
 
