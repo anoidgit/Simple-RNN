@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.3.2
+	Version 0.3.3
 
 ]]
 
@@ -57,7 +57,8 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember, needcopyForward
 	self.needcopyForward = needcopyForward
 	self.needcopyBackward = needcopyBackward
 
-	self:reset()
+	--self:reset()
+	self:reset(1.0 / math.sqrt(3 * outputSize))
 
 end
 
