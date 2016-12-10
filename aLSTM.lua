@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.3.3
+	Version 0.3.4
 
 ]]
 
@@ -982,6 +982,7 @@ function aLSTM:reset(stdv)
 
 end
 
+-- build input and forget gate
 function aLSTM:buildIFModule()
 
 	local _ifm = nn.aSequential()
