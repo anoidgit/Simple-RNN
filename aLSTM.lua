@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.3.6
+	Version 0.3.7
 
 ]]
 
@@ -448,7 +448,11 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 
 	-- backward ifgate(input and forget gate)
 	-- compute gradOutput
-	_gg:resize(self.batchsize, 2 * self.outputSize)
+	if self.batchsize then
+		_gg:resize(self.batchsize, 2 * self.outputSize)
+	else
+		_gg:resize(2 * self.outputSize)
+	end
 	_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _coz))
 	_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
 	-- backward the gate
@@ -591,7 +595,11 @@ function aLSTM:_seq_backward(input, gradOutput, scale)
 
 		-- backward ifgate(input and forget gate)
 		-- compute gradOutput
-		_gg:resize(self.batchsize, 2 * self.outputSize)
+		if self.batchsize then
+			_gg:resize(self.batchsize, 2 * self.outputSize)
+		else
+			_gg:resize(2 * self.outputSize)
+		end
 		_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _coz))
 		_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
 		-- backward the gate
@@ -741,7 +749,11 @@ function aLSTM:_tseq_backward(input, gradOutput, scale)
 
 		-- backward ifgate(input and forget gate)
 		-- compute gradOutput
-		_gg:resize(self.batchsize, 2 * self.outputSize)
+		if self.batchsize then
+			_gg:resize(self.batchsize, 2 * self.outputSize)
+		else
+			_gg:resize(2 * self.outputSize)
+		end
 		_gg:narrow(self.narrowDim, 1, self.outputSize):copy(torch.cmul(_gCell, _coz))
 		_gg:narrow(self.narrowDim, self.fgstartid, self.outputSize):copy(torch.cmul(_gCell, _cPrevCell))
 		-- backward the gate
