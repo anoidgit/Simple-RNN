@@ -31,6 +31,8 @@ build = {
 		aBstractStep = "aBstractStep.lua",
 		aGRU = "aGRU.lua",
 		aLSTM = "aLSTM.lua",
+		aFastLSTM = "aFastLSTM.lua",
+		aFastLSTMP = "aFastLSTMP.lua",
 		aSeqBiLinear = "dep/aSeqBiLinear.lua",
 		aTtention = "dep/aTtention.lua"
 	}
