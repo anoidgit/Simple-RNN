@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.3.7
+	Version 0.3.8
 
 ]]
 
@@ -131,6 +131,7 @@ function aLSTM:_Copy(data, isForwardCopy)
 	else
 		self._gLOutput = data[1]
 		self.__gLCell = data[2]
+		self.backwardCopied = true
 	end
 
 end
@@ -388,6 +389,26 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 		-- add gradOutput from the sequence behind
 		gradOutput:add(self._gLOutput)
 
+		-- if self._gLOutput was copied from later,
+		-- then process the last output
+		if self.backwardCopied then
+
+			-- remove the last output
+			local _lastOutput = table.remove(self.outputs)
+			-- get current cell,
+			-- it will be used will backward output gate
+			self.cell = table.remove(self.cells)
+
+			-- if need to remember to use for the next sequence
+			if self.rememberState then
+				self.lastCell = self.cell
+				self.lastOutput = _lastOutput
+			end
+
+			self.backwardCopied = nil
+
+		end
+
 	else
 
 		-- remove the last output
@@ -438,7 +459,7 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 	-- backward from the output tanh to cell
 	_gCell:add(self.tanh:updateGradInput(self.cell, torch.cmul(gradOutput, _coogate)))
 
-	-- backward update gate
+	-- backward hidden
 	local __gInput, __gLOutput = unpack(self.zmod:backward({input, _cPrevOutput}, torch.cmul(_gCell, _coigate), scale))
 	gradInput:add(__gInput)
 	self._gLOutput:add(__gLOutput)
@@ -911,6 +932,10 @@ function aLSTM:_tensor_clearState(tsr)
 	self._gLCell = nil
 	self._gLOutput = nil
 
+	-- if true, _step_backward will know it need to process the final output,
+	-- even self.__gLOutput is not nil
+	self.backwardCopied = nil
+
 end
 
 -- clear the storage
@@ -939,6 +964,10 @@ function aLSTM:_table_clearState()
 	-- grad from the sequence after
 	self._gLCell = nil
 	self._gLOutput = nil
+
+	-- if true, _step_backward will know it need to process the final output,
+	-- even self.__gLOutput is not nil
+	self.backwardCopied = nil
 
 end
 
