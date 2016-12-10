@@ -13,7 +13,7 @@
 	h[t] = o[t]tanh(c[t])                                                (6)
 	r[t] = W[h->r]h[t]                                                   (7)
 
-	Version 0.0.2
+	Version 0.0.3
 
 ]]
 
@@ -907,6 +907,10 @@ function aFastLSTMP:_tensor_clearState(tsr)
 	-- grad from the sequence after
 	self._gLCell = nil
 	self._gLOutput = nil
+
+	-- if true, _step_backward will know it need to process the final output,
+	-- even self.__gLOutput is not nil
+	self.backwardCopied = nil
 
 end
 
