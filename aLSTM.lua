@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.3.5
+	Version 0.3.6
 
 ]]
 
@@ -430,7 +430,7 @@ function aLSTM:_step_backward(input, gradOutput, scale)
 	-- backward output gate
 	gradInput, self._gLOutput, _gCell = unpack(self.ogate:backward({input, _cPrevOutput, self.cell}, _gg, scale))
 
-	if self.__gLCell then
+	if self._gLCell then
 		-- add gradOutput from the sequence behind
 		_gCell:add(self._gLCell)
 	end
