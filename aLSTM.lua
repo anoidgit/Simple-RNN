@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.3.4
+	Version 0.3.5
 
 ]]
 
@@ -173,11 +173,12 @@ function aLSTM:_step_updateOutput(input)
 
 	-- if training, remember what should remember
 	if self.train then
-		table.insert(self.cells, self.cell)
-		table.insert(self.outputs, self.output)
-		table.insert(self.otanh, _otanh)
-		table.insert(self.ofgate, _fgo)
-		table.insert(self.ougate, _zo)
+		table.insert(self.cells, self.cell)--c[t]
+		table.insert(self.outputs, self.output)--h[t]
+		table.insert(self.otanh, _otanh)--tanh[t]
+		table.insert(self.oifgate, _ifgo)--if[t], input and forget
+		table.insert(self.ohid, _zo)--z[t]
+		table.insert(self.oogate, _ogo)--o[t]
 	end
 
 	if self.needcopyForward then
