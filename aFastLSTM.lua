@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + b[1->o])                      (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.2
+	Version 0.0.3
 
 ]]
 
@@ -391,6 +391,8 @@ function aFastLSTM:_step_backward(input, gradOutput, scale)
 				self.lastCell = self.cell
 				self.lastOutput = _lastOutput
 			end
+
+			self.backwardCopied = nil
 
 		end
 
