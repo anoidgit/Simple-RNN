@@ -10,7 +10,7 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.2.3
+	Version 0.2.4
 
 ]]
 
@@ -82,6 +82,7 @@ function aGRU:_Copy(data, isForwardCopy)
 		self.output = data[1]
 	else
 		self._gLOutput = data[1]
+		self.backwardCopied = true
 	end
 
 end
@@ -361,6 +362,22 @@ function aGRU:_step_backward(input, gradOutput, scale)
 
 		-- add gradOutput from the sequence behind
 		gradOutput:add(self._gLOutput)
+
+		-- if self._gLOutput was copied from later,
+		-- then process the last output
+		if self.backwardCopied then
+
+			-- remove the last output, because it was never used
+			local _lastOutput = table.remove(self.outputs)
+
+			-- remember the end of sequence for next input use
+			if self.rememberState then
+				self.lastOutput = _lastOutput
+			end
+
+			self.backwardCopied = nil
+
+		end
 
 	else
 
@@ -804,6 +821,10 @@ function aGRU:_tensor_clearState(tsr)
 	-- grad from the sequence after
 	self._gLOutput = nil
 
+	-- if true, _step_backward will know it need to process the final output,
+	-- even self.__gLOutput is not nil
+	self.backwardCopied = nil
+
 end
 
 -- clear the storage
@@ -827,6 +848,10 @@ function aGRU:_table_clearState()
 
 	-- grad from the sequence after
 	self._gLOutput = nil
+
+	-- if true, _step_backward will know it need to process the final output,
+	-- even self.__gLOutput is not nil
+	self.backwardCopied = nil
 
 end
 
