@@ -13,7 +13,7 @@
 	h[t] = o[t]tanh(c[t])                                                (6)
 	r[t] = W[h->r]h[t]                                                   (7)
 
-	Version 0.0.3
+	Version 0.0.4
 
 ]]
 
@@ -399,6 +399,8 @@ function aFastLSTMP:_step_backward(input, gradOutput, scale)
 				self.lastCell = self.cell
 				self.lastOutput = _lastOutput
 			end
+
+			self.backwardCopied = nil
 
 		end
 
