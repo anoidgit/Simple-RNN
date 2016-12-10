@@ -3,7 +3,7 @@
 
 	Copyright (c) 2016 Hongfei Xu
 
-	This scripts implement a standard vanilla LSTM:
+	This scripts implement a standard FastLSTM:
 
 	i[t] = σ(W[x->i]x[t] + W[h->i]h[t−1] + b[1->i])                      (1)
 	f[t] = σ(W[x->f]x[t] + W[h->f]h[t−1] + b[1->f])                      (2)
@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + b[1->o])                      (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
@@ -133,6 +133,7 @@ function aFastLSTM:_Copy(data, isForwardCopy)
 	else
 		self._gLOutput = data[1]
 		self.__gLCell = data[2]
+		self.backwardCopied = true
 	end
 
 end
@@ -374,6 +375,24 @@ function aFastLSTM:_step_backward(input, gradOutput, scale)
 
 		-- add gradOutput from the sequence behind
 		gradOutput:add(self._gLOutput)
+
+		-- if self._gLOutput was copied from later,
+		-- then process the last output
+		if self.backwardCopied then
+
+			-- remove the last output
+			local _lastOutput = table.remove(self.outputs)
+			-- get current cell,
+			-- it will be used will backward output gate
+			self.cell = table.remove(self.cells)
+
+			-- if need to remember to use for the next sequence
+			if self.rememberState then
+				self.lastCell = self.cell
+				self.lastOutput = _lastOutput
+			end
+
+		end
 
 	else
 
@@ -861,6 +880,10 @@ function aFastLSTM:_tensor_clearState(tsr)
 	self._gLCell = nil
 	self._gLOutput = nil
 
+	-- if true, _step_backward will know it need to process the final output,
+	-- even self.__gLOutput is not nil
+	self.backwardCopied = nil
+
 end
 
 -- clear the storage
@@ -887,6 +910,10 @@ function aFastLSTM:_table_clearState()
 	-- grad from the sequence after
 	self._gLCell = nil
 	self._gLOutput = nil
+
+	-- if true, _step_backward will know it need to process the final output,
+	-- even self.__gLOutput is not nil
+	self.backwardCopied = nil
 
 end
 
