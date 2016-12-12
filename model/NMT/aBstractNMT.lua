@@ -5,7 +5,7 @@
 
 	This scripts implement an aBstractNMT for RNN:
 
-	Version 0.0.2
+	Version 0.0.3
 
 ]]
 
@@ -48,16 +48,20 @@ function aBstractNMT:_tranTensor(input)
 
 end
 
+function aBstractBase:_maxGetClass(scoret)
+
+	local _iSize = scoret:size()
+	local _nDim = #_iSize
+	local _, c = torch.max(scoret, _nDim)
+	if _nDim > 1 then
+		c = c:reshape(_iSize[1])
+	end
+	return c
+
+end
+
 function aBstractNMT:_updateState(words)
 
-	local _iSize = words:size()
-	local comp
-	if #_iSize > 1 then
-		comp = words:reshape(_iSize[1])
-	else
-		comp = words
-	end
-
-	self.state[comp:eq(self.eosid)] = 1
+	self.state[words:eq(self.eosid)] = 1
 
 end
