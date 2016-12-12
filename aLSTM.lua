@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.3.8
+	Version 0.3.9
 
 ]]
 
@@ -20,7 +20,7 @@ local aLSTM, parent = torch.class('nn.aLSTM', 'nn.aBstractSeq')
 --local aLSTM, parent = torch.class('nn.aLSTM', 'nn.aBstractStep')
 
 -- generate a module
-function aLSTM:__init(inputSize, outputSize, maskZero, remember, needcopyForward, needcopyBackward)
+function aLSTM:__init(inputSize, outputSize, maskZero, remember, needcopyForward, needcopyBackward, narrowDim)
 
 	parent.__init(self)
 
@@ -52,13 +52,13 @@ function aLSTM:__init(inputSize, outputSize, maskZero, remember, needcopyForward
 	-- prepare to build the modules
 	self.inputSize, self.outputSize = inputSize, outputSize
 
-	self.narrowDim = 1
+	self.narrowDim = narrowDim or 1
 
 	self.needcopyForward = needcopyForward
 	self.needcopyBackward = needcopyBackward
 
-	--self:reset()
-	self:reset(1.0 / math.sqrt(3 * outputSize))
+	self:reset()-- enable this for stdbuild
+	--self:reset(1.0 / math.sqrt(3 * outputSize))
 
 end
 
@@ -999,9 +999,9 @@ end
 -- reset the module
 function aLSTM:reset(stdv)
 
-	self.ifgate = self:buildIFModule()
+	self.ifgate = self:buildIFModule(true)
 	self.zmod = self:buildUpdateModule()
-	self.ogate = self:buildOGModule()
+	self.ogate = self:buildOGModule(true)
 
 	-- inner parameters need to correctly processed
 	-- in fact, it is output and cell at time step 0
@@ -1025,24 +1025,44 @@ function aLSTM:reset(stdv)
 end
 
 -- build input and forget gate
-function aLSTM:buildIFModule()
+function aLSTM:buildIFModule(stdbuild)
 
-	local _ifm = nn.aSequential()
-		:add(nn.aConcatTable()
-			:add(nn.aSequential()
-				:add(nn.aNarrowTable(1,2))
-				:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
-				:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize * 2)))
-			:add(nn.aSequential()
-				:add(nn.aSelectTable(-1))
-				:add(nn.aRepeat(2, self.narrowDim, self.narrowDim))
-				--[[:add(nn.aConcatTable()
-					:add(nn.Identity())
-					:add(nn.Identity()))
-				:add(nn.aJoinTable(self.narrowDim, self.narrowDim))]]
-				:add(nn.aCMul(self.outputSize * 2))))
-		:add(nn.aCAddTable())
-		:add(nn.aSigmoid(true))
+	local _ifm
+	if stdbuild then
+		_ifm = nn.aSequential()
+			:add(nn.aConcatTable()
+				:add(nn.aSequential()
+					:add(nn.aParallelTable()
+						:add(nn.aLinear(self.inputSize, self.outputSize))
+						:add(nn.aLinear(self.outputSize, self.outputSize))
+						:add(nn.aCMul(self.outputSize)))
+					:add(nn.aCAddTable()))
+				:add(nn.aSequential()
+					:add(nn.aParallelTable()
+						:add(nn.aLinear(self.inputSize, self.outputSize))
+						:add(nn.aLinear(self.outputSize, self.outputSize))
+						:add(nn.aCMul(self.outputSize)))
+					:add(nn.aCAddTable())))
+			:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
+			:add(nn.aSigmoid(true))
+	else
+		_ifm = nn.aSequential()
+			:add(nn.aConcatTable()
+				:add(nn.aSequential()
+					:add(nn.aNarrowTable(1,2))
+					:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
+					:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize * 2)))
+				:add(nn.aSequential()
+					:add(nn.aSelectTable(-1))
+					:add(nn.aRepeat(2, self.narrowDim, self.narrowDim))
+					--[[:add(nn.aConcatTable()
+						:add(nn.Identity())
+						:add(nn.Identity()))
+					:add(nn.aJoinTable(self.narrowDim, self.narrowDim))]]
+					:add(nn.aCMul(self.outputSize * 2))))
+			:add(nn.aCAddTable())
+			:add(nn.aSigmoid(true))
+	end
 
 	return _ifm
 
@@ -1061,19 +1081,30 @@ end
 end]]
 
 -- build output gate
-function aLSTM:buildOGModule()
+function aLSTM:buildOGModule(stdbuild)
 
-	local _ogm = nn.aSequential()
-		:add(nn.aConcatTable()
-			:add(nn.aSequential()
-				:add(nn.aNarrowTable(1,2))
-				:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
-				:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize)))
-			:add(nn.aSequential()
-				:add(nn.aSelectTable(-1))
-				:add(nn.aCMul(self.outputSize))))
-		:add(nn.aCAddTable())
-		:add(nn.aSigmoid(true))
+	local _ogm
+	if stdbuild then
+		_ogm = nn.aSequential()
+			:add(nn.aParallelTable()
+				:add(nn.aLinear(self.inputSize, self.outputSize))
+				:add(nn.aLinear(self.outputSize, self.outputSize))
+				:add(nn.aCMul(self.outputSize)))
+			:add(nn.aCAddTable())
+			:add(nn.aSigmoid(true))
+	else
+		_ogm = nn.aSequential()
+			:add(nn.aConcatTable()
+				:add(nn.aSequential()
+					:add(nn.aNarrowTable(1,2))
+					:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
+					:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize)))
+				:add(nn.aSequential()
+					:add(nn.aSelectTable(-1))
+					:add(nn.aCMul(self.outputSize))))
+			:add(nn.aCAddTable())
+			:add(nn.aSigmoid(true))
+	end
 
 	return _ogm
 
