@@ -10,7 +10,7 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.2.4
+	Version 0.2.5
 
 ]]
 
@@ -18,7 +18,7 @@ local aGRU, parent = torch.class('nn.aGRU', 'nn.aBstractSeq')
 --local aGRU, parent = torch.class('nn.aGRU', 'nn.aBstractStep')
 
 -- generate a module
-function aGRU:__init(inputSize, outputSize, maskZero, remember, needcopyForward, needcopyBackward)
+function aGRU:__init(inputSize, outputSize, maskZero, remember, needcopyForward, needcopyBackward, narrowDim)
 
 	parent.__init(self)
 
@@ -50,13 +50,13 @@ function aGRU:__init(inputSize, outputSize, maskZero, remember, needcopyForward,
 	-- prepare to build the modules
 	self.inputSize, self.outputSize = inputSize, outputSize
 
-	self.narrowDim = 1
+	self.narrowDim = narrowDim or 1
 
 	self.needcopyForward = needcopyForward
 	self.needcopyBackward = needcopyBackward
 
-	--self:reset()
-	self:reset(1.0 / math.sqrt(3 * outputSize))
+	self:reset()-- enable this for stdbuild
+	--self:reset(1.0 / math.sqrt(3 * outputSize))
 
 end
 
@@ -882,7 +882,7 @@ end
 -- reset the module
 function aGRU:reset(stdv)
 
-	self.ifgate = self:buildIFModule()
+	self.ifgate = self:buildIFModule(true)
 	self.hmod = self:buildUpdateModule()
 
 	-- inner parameters need to correctly processed
@@ -903,12 +903,31 @@ function aGRU:reset(stdv)
 end
 
 -- build input and forget gate
-function aGRU:buildIFModule()
+function aGRU:buildIFModule(stdbuild)
 
-	local _ifm = nn.aSequential()
-		:add(nn.aJoinTable(self.narrowDim,self.narrowDim))
-		:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize * 2))
-		:add(nn.aSigmoid(true))
+	local _ifm
+	if stdbuild then
+		_ifm = nn.Sequential()
+			:add(nn.aConcatTable()
+				:add(nn.aSequential()
+					:add(nn.aParallelTable()
+						:add(nn.aLinear(self.inputSize, self.outputSize))
+						:add(nn.aLinear(self.outputSize, self.outputSize, false)))
+					:add(nn.aCAddTable()))
+				:add(nn.aSequential()
+					:add(nn.aParallelTable()
+						:add(nn.aLinear(self.inputSize, self.outputSize))
+						:add(nn.aLinear(self.outputSize, self.outputSize, false)))
+					:add(nn.aCAddTable())))
+			:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
+			:add(nn.aSigmoid(true))
+
+	else
+		_ifm = nn.aSequential()
+			:add(nn.aJoinTable(self.narrowDim,self.narrowDim))
+			:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize * 2))
+			:add(nn.aSigmoid(true))
+	end
 
 	return _ifm
 
