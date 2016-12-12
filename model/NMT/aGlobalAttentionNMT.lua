@@ -5,7 +5,7 @@
 
 	This scripts implement an NMT for RNN:
 
-	Version 0.0.6
+	Version 0.0.7
 
 ]]
 
@@ -63,7 +63,7 @@ function aGlobalAttentionNMT:_seq_updateOutput(input)
 			_cOutput = self.decoder:updateOutput(_nInput)
 			_cAttention = self.attention:updateOutput({self._encoded, _cOutput})
 			_nInput = {_cOutput, _cAttention}
-			local _rs = self.classifier:updateOutput(_nInput)
+			local _rs = self:_maxGetClass(self.classifier:updateOutput(_nInput))
 			self:_updateState(_rs)
 			if self.evaOTag then
 				table.insert(_output, _rs)
