@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + b[1->o])                      (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.3
+	Version 0.0.4
 
 ]]
 
@@ -20,7 +20,7 @@ local aFastLSTM, parent = torch.class('nn.aFastLSTM', 'nn.aBstractSeq')
 --local aFastLSTM, parent = torch.class('nn.aFastLSTM', 'nn.aBstractStep')
 
 -- generate a module
-function aFastLSTM:__init(inputSize, outputSize, maskZero, remember, needcopyForward, needcopyBackward)
+function aFastLSTM:__init(inputSize, outputSize, maskZero, remember, needcopyForward, needcopyBackward, narrowDim)
 
 	parent.__init(self)
 
@@ -54,13 +54,13 @@ function aFastLSTM:__init(inputSize, outputSize, maskZero, remember, needcopyFor
 	-- prepare to build the modules
 	self.inputSize, self.outputSize = inputSize, outputSize
 
-	self.narrowDim = 1
+	self.narrowDim = narrowDim or 1
 
 	self.needcopyForward = needcopyForward
 	self.needcopyBackward = needcopyBackward
 
-	--self:reset()
-	self:reset(1.0 / math.sqrt(3 * outputSize))
+	self:reset()-- enable this for stdbuild
+	--self:reset(1.0 / math.sqrt(3 * outputSize))
 
 end
 
@@ -947,7 +947,7 @@ end
 -- reset the module
 function aFastLSTM:reset(stdv)
 
-	self.ifogate = self:buildIFOModule()
+	self.ifogate = self:buildIFOModule(true)
 	self.zmod = self:buildUpdateModule()
 
 	-- inner parameters need to correctly processed
@@ -972,12 +972,35 @@ function aFastLSTM:reset(stdv)
 end
 
 -- build input, forget and output gate
-function aFastLSTM:buildIFOModule()
+function aFastLSTM:buildIFOModule(stdbuild)
 
-	local _ifom = nn.aSequential()
-		:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
-		:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize * 3))
-		:add(nn.aSigmoid(true))
+	local _ifom
+	if stdbuild then
+		_ifom = nn.Sequential()
+			:add(nn.aConcatTable()
+				:add(nn.aSequential()
+					:add(nn.aParallelTable()
+						:add(nn.aLinear(self.inputSize, self.outputSize))
+						:add(nn.aLinear(self.outputSize, self.outputSize, false)))
+					:add(nn.aCAddTable()))
+				:add(nn.aSequential()
+					:add(nn.aParallelTable()
+						:add(nn.aLinear(self.inputSize, self.outputSize))
+						:add(nn.aLinear(self.outputSize, self.outputSize, false)))
+					:add(nn.aCAddTable())))
+				:add(nn.aSequential()
+					:add(nn.aParallelTable()
+						:add(nn.aLinear(self.inputSize, self.outputSize))
+						:add(nn.aLinear(self.outputSize, self.outputSize, false)))
+					:add(nn.aCAddTable())))
+			:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
+			:add(nn.aSigmoid(true))
+	else
+		_ifom = nn.aSequential()
+			:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
+			:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize * 3))
+			:add(nn.aSigmoid(true))
+	end
 
 	return _ifom
 
