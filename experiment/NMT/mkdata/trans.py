@@ -21,9 +21,8 @@ def transfile(srcf,rsf):
 	with open(rsf,"w") as fwrt:
 		tmp=str(lines)+"\n"
 		fwrt.write(tmp.encode("utf-8"))
-		for rsu in rsd:
-			tmp=" ".join(rsu)+"\n"
-			fwrt.write(tmp.encode("utf-8"))
+		tmp="\n".join([" ".join(rsu) for rsu in rsd])+"\n"
+		fwrt.write(tmp.encode("utf-8"))
 
 def transpath(srcpath,rspath):
 	for root,dirs,files in os.walk(srcpath):
