@@ -4,15 +4,17 @@ import sys
 reload(sys)
 sys.setdefaultencoding( "utf-8" )
 
-nearwords=200000
+nearwords=50000
 
 freqd={}
-ends=".targ"
-for i in xrange(40840):
+ends=".src"
+nline=0
+for i in xrange(63477):
 	with open("rs/train"+str(i+1)+ends) as frd:
 		for line in frd:
 			tmp=line.strip()
 			if tmp:
+				nline+=1
 				tmp=tmp.decode("utf-8")
 				tmp=tmp.split(" ")
 				for tmpu in tmp:
@@ -31,20 +33,43 @@ with open("freq"+ends,"w") as fwrt:
 freql.sort(reverse=True)
 cwrt=1
 writeall=True
+unigrams={}
+ncunk=True
 with open("map"+ends,"w") as fwrt:
 	for freq in freql:
 		wl=freqw[freq]
 		for word in wl:
-			tmp=word+"	"+str(cwrt)+"\n"
-			fwrt.write(tmp.encode("utf-8"))
-			cwrt+=1
+			if ncunk:
+				unigrams[cwrt]=freq
+				tmp=word+"	"+str(cwrt)+"\n"
+				fwrt.write(tmp.encode("utf-8"))
+				cwrt+=1
+			else:
+				unigrams[unkid]+=freq
 		if cwrt>nearwords:
-			print(str(cwrt+2)+" words maped")
-			writeall=False
-			break
-	for word in ["SOS","EOS","UNK"]:
+			if ncunk:
+				writeall=False
+				for word in ["SOS","EOS"]:
+					tmp=word+"	"+str(cwrt)+"\n"
+					fwrt.write(tmp.encode("utf-8"))
+					unigrams[cwrt]=nline
+					cwrt+=1
+				unkid=cwrt
+				unigrams[unkid]=0
+				ncunk=False
+				print(str(unkid)+" words maped")
+	if writeall:
+		for word in ["SOS","EOS"]:
 			tmp=word+"	"+str(cwrt)+"\n"
 			fwrt.write(tmp.encode("utf-8"))
+			unigrams[cwrt]=nline
 			cwrt+=1
-if writeall:
-	print(str(cwrt-1)+" words maped")
+		unkid=cwrt
+		unigrams[unkid]=0
+		print(str(unkid)+" words maped")
+	tmp="UNK	"+str(unkid)
+	fwrt.write(tmp.encode("utf-8"))
+with open("unigrams"+ends,"w") as fwrt:
+	for i in xrange(len(unigrams)):
+		tmp=str(unigrams[i+1])+"\n"
+		fwrt.write(tmp)
