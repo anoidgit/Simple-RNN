@@ -15,7 +15,7 @@ def ldd(df):
 				rsd[k]=v
 	return rsd
 
-def mapfile(srcf,rsf,mapd,unkid,addf,addv,padv,reverseOrder):
+def mapfile(srcf,rsf,mapd,unkid,addf,addl,padv,reverseOrder):
 	maxlen=0
 	maprs=[]
 	with open(srcf) as frd:
@@ -30,10 +30,8 @@ def mapfile(srcf,rsf,mapd,unkid,addf,addv,padv,reverseOrder):
 					maxlen=clen
 	for mapu in maprs:
 		clen=len(mapu)
-		if addf:
-			mapu.insert(0,addv)
-		else:
-			mapu.append(addv)
+		mapu.insert(0,addf)
+		mapu.append(addl)
 		if clen<maxlen:
 			ext=[padv for i in xrange(maxlen-clen)]
 			mapu.extend(ext)
@@ -46,11 +44,12 @@ def mapfile(srcf,rsf,mapd,unkid,addf,addv,padv,reverseOrder):
 def mapfl(srcfl,rsfl,mapf):
 	isEncoder=False
 	mapd=ldd(mapf)
-	addv=mapd["EOS"]#EOS,SOS
+	addf=mapd["SOS"]
+	addl=mapd["EOS"]
 	unkid=mapd["UNK"]
 	crs=0
 	for srcf in srcfl:
-		mapfile(srcf,rsfl[crs],mapd,unkid,isEncoder,addv,unkid,isEncoder)
+		mapfile(srcf,rsfl[crs],mapd,unkid,addf,addl,addl,isEncoder)
 		crs+=1
 
 if __name__=="__main__":
@@ -58,5 +57,5 @@ if __name__=="__main__":
 	typ=".targ"
 	srcp="rs/"
 	rsp="mapd/"
-	nfile=40840
+	nfile=63477
 	mapfl([srcp+fhead+str(i+1)+typ for i in xrange(nfile)],[rsp+fhead+str(i+1)+typ for i in xrange(nfile)],"map"+typ)
