@@ -50,7 +50,7 @@ function aGRU:__init(inputSize, outputSize, maskZero, remember, needcopyForward,
 	-- prepare to build the modules
 	self.inputSize, self.outputSize = inputSize, outputSize
 
-	self.narrowDim = narrowDim or 2
+	self.narrowDim = narrowDim or 1
 
 	self.needcopyForward = needcopyForward
 	self.needcopyBackward = needcopyBackward
