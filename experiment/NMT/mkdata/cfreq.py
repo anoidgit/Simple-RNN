@@ -7,9 +7,9 @@ sys.setdefaultencoding( "utf-8" )
 nearwords=50000
 
 freqd={}
-ends=".src"
+ends=".targ"
 nline=0
-for i in xrange(63477):
+for i in xrange(32694):
 	with open("rs/train"+str(i+1)+ends) as frd:
 		for line in frd:
 			tmp=line.strip()

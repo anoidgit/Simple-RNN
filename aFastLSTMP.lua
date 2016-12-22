@@ -13,7 +13,7 @@
 	h[t] = o[t]tanh(c[t])                                                (6)
 	r[t] = W[h->r]h[t]                                                   (7)
 
-	Version 0.0.5
+	Version 0.0.6
 
 ]]
 
@@ -979,7 +979,7 @@ end
 -- reset the module
 function aFastLSTMP:reset(stdv)
 
-	self.ifogate = self:buildIFOModule(true)
+	self.ifogate = self:buildIFOModule()
 	self.zmod = self:buildUpdateModule()
 	self.projector = nn.Linear(self.outputSize, self.outputSize, false)
 
@@ -990,7 +990,7 @@ function aFastLSTMP:reset(stdv)
 
 	-- module used to compute the forward and backward of tanh
 	-- It seems does not need to be put in self.modules
-	self.tanh = nn.aTanh(true)
+	self.tanh = nn.aSeqTanh(true)
 
 	--[[ put the modules in self.modules,
 	so the default method could be done correctly]]
@@ -1035,7 +1035,7 @@ function aFastLSTMP:buildIFOModule(stdbuild)
 			:add(nn.aSigmoid(true))
 	end
 
-	return _ifom
+	return nn.Recursor(_ifom)
 
 end
 
@@ -1059,7 +1059,7 @@ function aFastLSTMP:buildUpdateModule()
 		:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize))
 		:add(nn.aTanh(true))
 
-	return _um
+	return nn.Recursor(_um)
 
 end
 

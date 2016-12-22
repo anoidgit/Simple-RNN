@@ -13,15 +13,9 @@
 
 ]]
 
-local aSeqSoftMax = torch.class('nn.aSeqSoftMax', 'nn.Module')
+local aSoftMax = torch.class('nn.aSoftMax', 'nn.Module')
 
-function aSeqSoftMax:__init(reverseOrder, transpose)
-
-	if reverseOrder then
-		self.rindex = nil
-	else
-		self.rindex = 1
-	end
+function aSoftMax:__init(transpose)
 
 	self.transpose = transpose
 
@@ -30,7 +24,7 @@ function aSeqSoftMax:__init(reverseOrder, transpose)
 end
 
 -- evaluate
-function aSeqSoftMax:evaluate()
+function aSoftMax:evaluate()
 
 	self.train = false
 
@@ -39,7 +33,7 @@ function aSeqSoftMax:evaluate()
 end
 
 -- train
-function aSeqSoftMax:training()
+function aSoftMax:training()
 
 	self.train = true
 
@@ -47,13 +41,13 @@ function aSeqSoftMax:training()
 
 end
 
-function aSeqSoftMax:backward(input, gradOutput, scale)
+function aSoftMax:backward(input, gradOutput, scale)
 
 	return self:updateGradInput(input, gradOutput)
 
 end
 
-function aSeqSoftMax:updateOutput(input)
+function aSoftMax:updateOutput(input)
 
 	self.gradInput = nil
 
@@ -78,21 +72,14 @@ function aSeqSoftMax:updateOutput(input)
 
 	end
 
-	if self.train then
-		table.insert(self._output, output)
-	end
-
 	self.output = output
 
 	return self.output
 
 end
 
-function aSeqSoftMax:updateGradInput(input, gradOutput)
+function aSoftMax:updateGradInput(input, gradOutput)
 
-	self.output = nil
-
-	local output = table.remove(self._output, self.rindex)
 	local gradInput = input.new()
 	gradInput:resizeAs(input)
 
@@ -102,7 +89,7 @@ function aSeqSoftMax:updateGradInput(input, gradOutput)
 			input:t():cdata(),
 			gradOutput:t():cdata(),
 			gradInput:cdata(),
-			output:t():cdata()
+			self.output:t():cdata()
 		)
 
 		gradInput = gradInput:t()
@@ -113,27 +100,14 @@ function aSeqSoftMax:updateGradInput(input, gradOutput)
 			input:cdata(),
 			gradOutput:cdata(),
 			gradInput:cdata(),
-			output:cdata()
+			self.output:cdata()
 		)
 
 	end
 
 	self.gradInput = gradInput
+	self.output = nil
 
 	return self.gradInput
-
-end
-
--- Warning: This method is dangerous,
--- unless you know what you are doing.
-function aSeqSoftMax:clearState()
-
-	self._output = {}
-
-end
-
-function aSeqSoftMax:forget()
-
-	self:clearState()
 
 end

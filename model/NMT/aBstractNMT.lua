@@ -5,7 +5,7 @@
 
 	This scripts implement an aBstractNMT for RNN:
 
-	Version 0.0.3
+	Version 0.0.6
 
 ]]
 
@@ -18,12 +18,24 @@ function aBstractNMT:__init()
 
 end
 
+function aBstractNMT:updateOutput(input)
+
+	return self:_seq_updateOutput(input)
+
+end
+
+function aBstractNMT:backward(input, gradOutput, scale)
+
+	return self:_seq_backward(input, gradOutput, scale)
+
+end
+
 -- transfer a table contain data like (batchsize*)inputsize to a tensor with size seqlen(*batchsize)*inputsize
 function aBstractNMT:_tranTable(inputTable)
 
 	local _iSize = inputTable[1]:size()
 	local _oSize = torch.LongStorage(#_iSize + 1)
-	_oSize[1] = 1
+	_oSize[1] = #inputTable
 	for _ = 1, #_iSize do
 		_oSize[_ + 1] = _iSize[_]
 	end
@@ -48,7 +60,7 @@ function aBstractNMT:_tranTensor(input)
 
 end
 
-function aBstractBase:_maxGetClass(scoret)
+function aBstractNMT:_maxGetClass(scoret)
 
 	local _iSize = scoret:size()
 	local _nDim = #_iSize
@@ -62,6 +74,29 @@ end
 
 function aBstractNMT:_updateState(words)
 
-	self.state[words:eq(self.eosid)] = 1
+	self.state[words:eq(self.eosid)]:fill(1)
+
+end
+
+function aBstractNMT:_gRecursiveZero(tbin)
+	local rs
+	if torch.isTensor(tbin)	then
+		rs = tbin:clone():zero()
+	else
+		rs = {}
+		for _, v in ipairs(tbin) do
+			rs[_] = self:_gRecursiveZero(v)
+		end
+	end
+	return rs
+end
+
+function aBstractNMT:_maskDecoderZero(answer, dInput)
+
+	for _ = 1, answer:size(1) do
+		if answer[_] == 0 then
+			dInput[_]:zero()
+		end
+	end
 
 end

@@ -13,8 +13,12 @@ torch.include('sarnn', 'aBstractSeq.lua')
 torch.include('sarnn', 'aBstractStep.lua')
 torch.include('sarnn', 'aGRU.lua')
 torch.include('sarnn', 'aLSTM.lua')
-torch.include('sarnn', 'dep/aSeqBiLinear.lua')
+torch.include('sarnn', 'aFastLSTM.lua')
+torch.include('sarnn', 'aFastLSTMP.lua')
+torch.include('sarnn', 'dep/aBiLinearScore.lua')
 torch.include('sarnn', 'dep/aTtention.lua')
+torch.include('sarnn', 'model/NMT/aBstractNMT.lua')
+torch.include('sarnn', 'model/NMT/aGlobalAttentionNMT.lua')
 
 -- prevent likely name conflicts
 nn.sarnn = sarnn

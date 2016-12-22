@@ -4,6 +4,8 @@ import sys
 reload(sys)
 sys.setdefaultencoding( "utf-8" )
 
+limit=50
+
 def sortf(fsrcs,fsrct,frss,frst,freqf):
 	l=[]
 	storage={}
@@ -16,12 +18,15 @@ def sortf(fsrcs,fsrct,frss,frst,freqf):
 				if tmps:
 					tmps=tmps.decode("utf-8")
 					tmpt=tmpt.decode("utf-8")
-					lgth=len(tmps.split(" "))+len(tmpt.split(" "))
-					if lgth in storage:
-						storage[lgth].append((tmps,tmpt))
-					else:
-						l.append(lgth)
-						storage[lgth]=[(tmps,tmpt)]
+					ls=len(tmps.split(" "))
+					lt=len(tmpt.split(" "))
+					if ls<limit and lt<limit:
+						lgth=ls+lt
+						if lgth in storage:
+							storage[lgth].append((tmps,tmpt))
+						else:
+							l.append(lgth)
+							storage[lgth]=[(tmps,tmpt)]
 	l.sort(reverse=True)
 	with open(frss,"w") as fwrts:
 		with open(frst,"w") as fwrtt:

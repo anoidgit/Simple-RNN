@@ -11,20 +11,31 @@
 
 starterate = math.huge--warning:only used as init erate, not asigned to criterion
 
-runid = "161208"
+runid = "161217"
 
-ieps = 2
-warmcycle = 0
-expdecaycycle = 2
+ieps = 1
+warmcycle = 1
+expdecaycycle = 4
 gtraincycle = 64
 
-modlr = 1/1024
+nsam = 43855
+ndev = 75
+
+nreport = 20
+
+--[[prld = 0.75
+nfresh = 64
+tld = 128]]
+
+modlr = 1/8192/64
 
 csave = 3
 
-nclass = unigrams:size(1)
+lrdecaycycle = 32
 
-lrdecaycycle = 4
+knegsample = 64
 
 cycs = false--warning:this option need a lot of memory
 savecycle = 32
+
+device = 3

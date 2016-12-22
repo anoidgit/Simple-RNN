@@ -53,6 +53,8 @@ end
 
 function aSeqSigmoid:updateOutput(input)
 
+	self.gradInput = nil
+
 	local output = input.new()
 	output:resizeAs(input)
 	input.THNN.Sigmoid_updateOutput(
@@ -69,6 +71,8 @@ function aSeqSigmoid:updateOutput(input)
 end
 
 function aSeqSigmoid:updateGradInput(input, gradOutput)
+
+	self.output = nil
 
 	local output = table.remove(self._output, self.rindex)
 

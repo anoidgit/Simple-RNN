@@ -3,16 +3,16 @@
 
 	Copyright (c) 2016 Hongfei Xu
 
-	This scripts implement an NMT for RNN:
+	This scripts implement an NMT based RNN:
 
-	Version 0.0.7
+	Version 0.0.15
 
 ]]
 
 local aGlobalAttentionNMT, parent = torch.class('nn.aGlobalAttentionNMT', 'nn.aBstractNMT')
 
 -- generate a module
-function aGlobalAttentionNMT:__init(encoder, decoder, attention, classifier, eosid, max_Target_Length, evaOTag)
+function aGlobalAttentionNMT:__init(encoder, decoder, attention, classifier, eosid, max_Target_Length, maskzero, evaOTag)
 
 	parent.__init(self)
 
@@ -22,22 +22,46 @@ function aGlobalAttentionNMT:__init(encoder, decoder, attention, classifier, eos
 	self.classifier = classifier
 	self.eosid = eosid
 	self.maxLength = max_Target_Length or 256
+	self.maskzero = maskzero
 	self.evaOTag = evaOTag
 
 	self.modules = {self.encoder, self.decoder, self.attention}
 
 end
 
+function aGlobalAttentionNMT:clearState()
+
+	self._initInput = nil
+	self._encoded = nil
+
+end
+
+function aGlobalAttentionNMT:forget()
+
+	self:clearState()
+	for _, module in ipairs(self.modules) do
+		module:forget()
+	end
+
+end
+
 function aGlobalAttentionNMT:_seq_updateOutput(input)
+
+	self.gradInput = nil
+
+	if not self.train then
+		self:forget()
+	end
 
 	-- get source and target
 	local src = input[1]
 	local tar = input[2]
 
 	-- encode the whole sequence
-	self._encoded = self:_tranTable(self.encoder:updateOutput(input))
+	--self._encoded = self:_tranTable(self.encoder:updateOutput(src))
+	self._encoded = self.encoder:updateOutput(src)
 
-	self:_copy_forward(encoder, decoder)
+	--self:_copy_forward(self.encoder, self.decoder)
 
 	-- prepare the whole sequence
 	local _cOutput = self._encoded[-1]
@@ -47,10 +71,13 @@ function aGlobalAttentionNMT:_seq_updateOutput(input)
 
 	local _output = {}-- store the result
 
-	if self.train then
+	if self.train or #tar > 0 then
 
-		for _ = 1, #tar do
+		for _, v in ipairs(tar) do
 			_cOutput = self.decoder:updateOutput(_nInput)
+			if self.maskzero then
+				self:_maskDecoderZero(v, _cOutput)
+			end
 			_cAttention = self.attention:updateOutput({self._encoded, _cOutput})
 			_nInput = {_cOutput, _cAttention}
 			table.insert(_output, _nInput)
@@ -72,10 +99,10 @@ function aGlobalAttentionNMT:_seq_updateOutput(input)
 			end
 			_length = _length + 1
 		end
+
 	end
 
 	self.output = _output
-
 	return self.output
 
 end
@@ -105,12 +132,16 @@ function aGlobalAttentionNMT:_seq_backward(input, gradOutput, scale)
 
 		local _cGradOutput, _cGradAttention = unpack(table.remove(gradOutput))
 
+		if self.maskzero then
+			self:_maskDecoderZero(tar[_], _cGradOutput)
+		end
+
 		if _gLOutput then
 			_cGradOutput:add(_gLOutput)
 			_cGradAttention:add(_gLAttention)
 		end
 
-		__gEncoder, _gOutput = self.attention:backward({self.encoded, _cOutput}, _cGradAttention, scale)
+		__gEncoder, _gOutput = unpack(self.attention:backward({self._encoded, _cOutput}, _cGradAttention, scale))
 
 		if _gEncoder then
 			_gEncoder:add(__gEncoder)
@@ -126,7 +157,9 @@ function aGlobalAttentionNMT:_seq_backward(input, gradOutput, scale)
 
 	end
 
-	local __gEncoder, _gOutput = self.attention:backward(self._initInput, _gLAttention, scale)
+	self.output = nil
+
+	__gEncoder, _gOutput = unpack(self.attention:backward({self._encoded, self._encoded[-1]}, _gLAttention, scale))
 
 	if _gEncoder then
 		_gEncoder:add(__gEncoder)
@@ -136,9 +169,12 @@ function aGlobalAttentionNMT:_seq_backward(input, gradOutput, scale)
 
 	_gEncoder[-1]:add(_gLOutput):add(_gOutput)
 
-	self:_copy_backward(decoder, encoder)
+	--self:_copy_backward(decoder, encoder)
 
-	self.gradInput = {self.encoder:backward(src, self:_tranTensor(_gEncoder), scale)}
+	--self.gradInput = {self.encoder:backward(src, self:_tranTensor(_gEncoder), scale), self:_gRecursiveZero(tar)}
+	self.gradInput = {self.encoder:backward(src, _gEncoder, scale), self:_gRecursiveZero(tar)}
+
+	self:forget()
 
 	return self.gradInput
 

@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + W[c->o]c[t] + b[1->o])        (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.3.9
+	Version 0.3.10
 
 ]]
 
@@ -999,9 +999,9 @@ end
 -- reset the module
 function aLSTM:reset(stdv)
 
-	self.ifgate = self:buildIFModule(true)
+	self.ifgate = self:buildIFModule()
 	self.zmod = self:buildUpdateModule()
-	self.ogate = self:buildOGModule(true)
+	self.ogate = self:buildOGModule()
 
 	-- inner parameters need to correctly processed
 	-- in fact, it is output and cell at time step 0
@@ -1010,7 +1010,7 @@ function aLSTM:reset(stdv)
 
 	-- module used to compute the forward and backward of tanh
 	-- It seems does not need to be put in self.modules
-	self.tanh = nn.aTanh(true)
+	self.tanh = nn.aSeqTanh(true)
 
 	--[[ put the modules in self.modules,
 	so the default method could be done correctly]]
@@ -1064,7 +1064,7 @@ function aLSTM:buildIFModule(stdbuild)
 			:add(nn.aSigmoid(true))
 	end
 
-	return _ifm
+	return nn.Recursor(_ifm)
 
 end
 
@@ -1106,7 +1106,7 @@ function aLSTM:buildOGModule(stdbuild)
 			:add(nn.aSigmoid(true))
 	end
 
-	return _ogm
+	return nn.Recursor(_ogm)
 
 end
 
@@ -1130,7 +1130,7 @@ function aLSTM:buildUpdateModule()
 		:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize))
 		:add(nn.aTanh(true))
 
-	return _um
+	return nn.Recursor(_um)
 
 end
 

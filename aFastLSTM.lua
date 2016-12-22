@@ -12,7 +12,7 @@
 	o[t] = σ(W[x->o]x[t] + W[h->o]h[t−1] + b[1->o])                      (5)
 	h[t] = o[t]tanh(c[t])                                                (6)
 
-	Version 0.0.4
+	Version 0.0.5
 
 ]]
 
@@ -947,7 +947,7 @@ end
 -- reset the module
 function aFastLSTM:reset(stdv)
 
-	self.ifogate = self:buildIFOModule(true)
+	self.ifogate = self:buildIFOModule()
 	self.zmod = self:buildUpdateModule()
 
 	-- inner parameters need to correctly processed
@@ -957,7 +957,7 @@ function aFastLSTM:reset(stdv)
 
 	-- module used to compute the forward and backward of tanh
 	-- It seems does not need to be put in self.modules
-	self.tanh = nn.aTanh(true)
+	self.tanh = nn.aSeqTanh(true)
 
 	--[[ put the modules in self.modules,
 	so the default method could be done correctly]]
@@ -1002,7 +1002,7 @@ function aFastLSTM:buildIFOModule(stdbuild)
 			:add(nn.aSigmoid(true))
 	end
 
-	return _ifom
+	return nn.Recursor(_ifom)
 
 end
 
@@ -1026,7 +1026,7 @@ function aFastLSTM:buildUpdateModule()
 		:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize))
 		:add(nn.aTanh(true))
 
-	return _um
+	return nn.Recursor(_um)
 
 end
 

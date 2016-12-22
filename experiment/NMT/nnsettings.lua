@@ -12,6 +12,6 @@
 pDropout = 0.2
 
 hiddenSize = {}
-for _ = 1, 8 do
+for _ = 1, 1 do
   table.insert(hiddenSize, sizvec)
 end

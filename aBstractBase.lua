@@ -5,7 +5,7 @@
 
 	This scripts implement an aBstractBase for RNN:
 
-	Version 0.1.2
+	Version 0.1.3
 
 ]]
 
@@ -131,7 +131,7 @@ function aBstractBase:_copy_forward(fromodel, tomodel)
 		local crfm = fromodel:get(_)
 		if torch.isTypeOf(crfm, 'nn.aBstractBase') then
 			local tarm = tomodel:get(_)
-			tarm:_Copy(fromodel.memTCopy, true)
+			tarm:_Copy(crfm.memTCopy, true)
 		end
 	end
 
@@ -144,7 +144,7 @@ function aBstractBase:_copy_backward(fromodel, tomodel)
 		local crfm = fromodel:get(_)
 		if torch.isTypeOf(crfm, 'nn.aBstractBase') then
 			local tarm = tomodel:get(_)
-			tarm:_Copy(fromodel.gradTCopy)
+			tarm:_Copy(crfm.gradTCopy)
 		end
 	end
 

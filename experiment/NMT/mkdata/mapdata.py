@@ -23,6 +23,7 @@ def mapfile(srcf,rsf,mapd,unkid,addf,addl,padv,reverseOrder):
 			tmp=line.strip()
 			if tmp:
 				tmp=tmp.decode("utf-8")
+				tmp=tmp.split(" ")
 				rs=[mapd.get(tmpu,unkid) for tmpu in tmp]
 				maprs.append(rs)
 				clen=len(rs)
@@ -42,20 +43,20 @@ def mapfile(srcf,rsf,mapd,unkid,addf,addl,padv,reverseOrder):
 		fwrt.write(tmp.encode("utf-8"))
 
 def mapfl(srcfl,rsfl,mapf):
-	isEncoder=False
+	isEncoder=True
 	mapd=ldd(mapf)
 	addf=mapd["SOS"]
 	addl=mapd["EOS"]
 	unkid=mapd["UNK"]
 	crs=0
 	for srcf in srcfl:
-		mapfile(srcf,rsfl[crs],mapd,unkid,addf,addl,addl,isEncoder)
+		mapfile(srcf,rsfl[crs],mapd,unkid,addf,addl,"0",isEncoder)
 		crs+=1
 
 if __name__=="__main__":
 	fhead="train"
-	typ=".targ"
+	typ=".src"
 	srcp="rs/"
 	rsp="mapd/"
-	nfile=63477
+	nfile=43855
 	mapfl([srcp+fhead+str(i+1)+typ for i in xrange(nfile)],[rsp+fhead+str(i+1)+typ for i in xrange(nfile)],"map"+typ)

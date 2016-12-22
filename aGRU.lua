@@ -10,7 +10,7 @@
 	h[t] = tanh(W[x->h]x[t] + W[hr->c](s[t−1]r[t]) + b[1->h])  (3)
 	s[t] = (1-z[t])h[t] + z[t]s[t-1]                           (4)
 
-	Version 0.2.5
+	Version 0.2.6
 
 ]]
 
@@ -50,7 +50,7 @@ function aGRU:__init(inputSize, outputSize, maskZero, remember, needcopyForward,
 	-- prepare to build the modules
 	self.inputSize, self.outputSize = inputSize, outputSize
 
-	self.narrowDim = narrowDim or 1
+	self.narrowDim = narrowDim or 2
 
 	self.needcopyForward = needcopyForward
 	self.needcopyBackward = needcopyBackward
@@ -132,7 +132,7 @@ end
 function aGRU:_step_updateOutput(input)
 
 	-- ensure output are ready for the first step
-	if not self.output then
+	if not self.output or self.output:size(1)~=input:size(1) then
 
 		self:_prepare_data(input)
 
@@ -150,7 +150,7 @@ function aGRU:_step_updateOutput(input)
 	local _ro = torch.cmul(self.output, _fgo)
 
 	-- compute hidden
-	local _ho = self.hmod:forward({iv, _ro})
+	local _ho = self.hmod:forward({input, _ro})
 
 	local _igr = _igo.new()
 	_igr:resizeAs(_igo):fill(1):csub(_igo)
@@ -358,7 +358,7 @@ function aGRU:_step_backward(input, gradOutput, scale)
 	local _cPrevOutput, _coifgate, _coh, _coigate, _cofgate, _gg, _coigr, _cro, _gro
 
 	-- if this is not the last step
-	if self.__gLOutput then
+	if self._gLOutput then
 
 		-- add gradOutput from the sequence behind
 		gradOutput:add(self._gLOutput)
@@ -383,7 +383,7 @@ function aGRU:_step_backward(input, gradOutput, scale)
 
 		-- remove the last output, because it was never used
 		local _lastOutput = table.remove(self.outputs)
-
+		
 		-- remember the end of sequence for next input use
 		if self.rememberState then
 			self.lastOutput = _lastOutput
@@ -464,7 +464,7 @@ function aGRU:_step_backward(input, gradOutput, scale)
 
 	-- this have conflict with _table_seq_backward,
 	-- but anyhow do not use them at the same time
-	self.gradInput = gradInput
+	self.gradInput = gradInput:clone()
 
 	return self.gradInput
 
@@ -882,7 +882,7 @@ end
 -- reset the module
 function aGRU:reset(stdv)
 
-	self.ifgate = self:buildIFModule(true)
+	self.ifgate = self:buildIFModule()
 	self.hmod = self:buildUpdateModule()
 
 	-- inner parameters need to correctly processed
@@ -920,16 +920,16 @@ function aGRU:buildIFModule(stdbuild)
 						:add(nn.aLinear(self.outputSize, self.outputSize, false)))
 					:add(nn.aCAddTable())))
 			:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
-			:add(nn.aSigmoid(true))
+			:add(nn.aSigmoid())
 
 	else
 		_ifm = nn.aSequential()
 			:add(nn.aJoinTable(self.narrowDim,self.narrowDim))
 			:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize * 2))
-			:add(nn.aSigmoid(true))
+			:add(nn.aSigmoid())
 	end
 
-	return _ifm
+	return nn.Recursor(_ifm)
 
 end
 
@@ -937,11 +937,11 @@ end
 function aGRU:buildUpdateModule()
 
 	local _um = nn.aSequential()
-		:add(nn.aJoinTable(self.narrowDim,self.narrowDim))
+		:add(nn.aJoinTable(self.narrowDim, self.narrowDim))
 		:add(nn.aLinear(self.inputSize + self.outputSize, self.outputSize))
-		:add(nn.aTanh(true))
+		:add(nn.aTanh())
 
-	return _um
+	return nn.Recursor(_um)
 
 end
 

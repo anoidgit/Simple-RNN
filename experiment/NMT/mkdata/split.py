@@ -10,10 +10,10 @@ def splitf(fsrcs,fsrct,freq,rsp):
 	cursave=1
 	minib=16
 	maxdl=16
-	maxbatch=96
-	maxind=50*32
+	maxbatch=64
+	maxind=50*50
 	maxind=float(maxind)
-	maxlen=64
+	maxlen=96
 	with open(freq) as frd:
 		with open(fsrcs) as frds:
 			with open(fsrct) as frdt:

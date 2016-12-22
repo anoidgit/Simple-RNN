@@ -37,7 +37,8 @@ function evaDev(mlpin, x, y, criterionin)
 	mlpin:evaluate()
 	local serr=0
 	for curpot,v in ipairs(x) do
-		serr=serr+criterionin:forward(mlpin:forward(v), y[curpot])
+		local tar=y[curpot]
+		serr=serr+criterionin:forward(mlpin:forward({v,tar}), tar)
 	end
 	mlpin:training()
 	return serr/ndev
@@ -112,9 +113,17 @@ function train()
 	nnmod:training()
 
 	local critmod=getcrit()
+	local targetmodel=nn.SplitTable(1)
+	targetmodel:evaluate()
 
 	nnmod:cuda()
 	critmod:cuda()
+
+	print("preprocess data")
+	targetmodel:cuda()
+	mwordt=prod(targetmodel,mwordt)
+	devt=prod(targetmodel,devt)
+	targetmodel=nil
 
 	_inner_params, _inner_gradParams=nnmod:getParameters()
 
@@ -123,21 +132,27 @@ function train()
 	local lr=modlr
 	--inirand()
 
-	print("turn off embeddings update")
+	--[[print("turn off embeddings update")
 	dupvec(nnmod)
 	print("turn off embeddings norm")
-	dnormvec(nnmod)
+	dnormvec(nnmod)]]
 	
 	mindeverrate=evaDev(nnmod,devin,devt,critmod)
 	print("Init model Dev:"..mindeverrate)
 
-	collectgarbage()
+	--[[collectgarbage()
 
 	print("start pre train")
 	for tmpi=1,warmcycle do
 		for tmpj=1,ieps do
 			for curpot,v in ipairs(mword) do
-				gradUpdate(nnmod,v,mwordt[curpot],critmod,lr,optmethod)
+				local timer = torch.Timer()
+				local tar = mwordt[curpot]
+				print("batch:"..v:size(2)..",src:"..v:size(1)..",tar:"..#tar)
+				gradUpdate(nnmod,{v,tar},tar,critmod,lr,optmethod)
+				timer:stop()
+				collectgarbage()
+				print("mini-batch:"..curpot..",time:"..timer:time().real.."s")
 			end
 		end
 		local erate=sumErr/eaddtrain
@@ -148,12 +163,16 @@ function train()
 		print("epoch:"..tostring(epochs)..",lr:"..lr..",Tra:"..erate)
 		sumErr=0
 		epochs=epochs+1
+		if math.random()<prld then
+			print("Flush Data")
+			rldt()
+		end
 	end
 	
 	print("save neural network trained")
 	saveObject(savedir.."nnmod.asc",nnmod)
 	
-	--[[print("turn on embeddings update")
+	print("turn on embeddings update")
 	upvec(nnmod)]]
 
 	epochs=1
@@ -167,16 +186,26 @@ function train()
 	while true do
 		print("start innercycle:"..icycle)
 		for innercycle=1,gtraincycle do
+			collectgarbage()
+			local timer=torch.Timer()
 			for tmpi=1,ieps do
+				local ti=torch.Timer()
 				for curpot,v in ipairs(mword) do
-					gradUpdate(nnmod,v,mwordt[curpot],critmod,lr,optmethod)
+					local tar=mwordt[curpot]
+					gradUpdate(nnmod,{v,tar},tar,critmod,lr,optmethod)
+					if curpot%nreport==0 then
+						print(curpot.."/"..nsam..",loss:".._inner_err..",time:"..ti:time().real.."s")
+						ti:reset()
+					end
+					collectgarbage()
 				end
 			end
+			timer:stop()
 			local erate=sumErr/eaddtrain
 			table.insert(crithis,erate)
 			local edevrate=evaDev(nnmod,devin,devt,critmod)
 			table.insert(cridev,edevrate)
-			print("epoch:"..tostring(epochs)..",lr:"..lr..",Tra:"..erate..",Dev:"..edevrate)
+			print("epoch:"..tostring(epochs)..",lr:"..lr..",Tra:"..erate..",Dev:"..edevrate..",Time"..timer:time().real.."s")
 			--print("epoch:"..tostring(epochs)..",lr:"..lr..",Tra:"..erate)
 			local modsavd=false
 			if edevrate<mindeverrate then
@@ -250,6 +279,10 @@ function train()
 				end
 			end
 			epochs=epochs+1
+			--[[if math.random()<prld then
+				print("Flush Data")
+				rldt()
+			end]]
 		end
 
 		print("save neural network trained")

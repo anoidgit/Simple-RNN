@@ -7,21 +7,17 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.5
+	Version 0.0.7
 
 ]]
 
 local aTtention = torch.class('nn.aTtention', 'nn.Container')
 
-function aTtention:__init(vecsize, reverseOrder)
+function aTtention:__init(vecsize, maskzero)
 
 	self.vecsize = vecsize
 
-	if reverseOrder then
-		self.rindex = nil
-	else
-		self.rindex = 1
-	end
+	self.maskzero = maskzero
 
 	self:reset()
 
@@ -51,50 +47,84 @@ end
 
 function aTtention:backward(input, gradOutput, scale)
 
+	self.output = nil
 	local src = input[1]--seqlen(*batchsize)*vecsize
-	local _iSize = src:size()
-	local ndim = #_iSize
-	local seqlen = _iSize[1]
-	local batchsize
-	_iSize[1] = 1
-	gradOutput = gradOutput:reshape(_iSize)--1(*batchsize)*vecsize
-	_iSize[1] = seqlen
-	gradOutput = gradOutput:expand(_iSize)-- seqlen(*batchsize)*vecsize
-	local gradScore = torch.cmul(gradOutput, src):sum(ndim)
-	if ndim == 3 then
-		batchsize = _iSize[2]
-		gradScore = gradScore:reshape(seqlen,batchsize)
-	else
-		gradScore = gradScore:reshape(seqlen)
+	if self.maskzero then
+		self:_maskZero(input[2], gradOutput)
 	end
+	local _iSize = src:size()
+	local _sdim = #_iSize - 1
+	local seqlen = _iSize[1]
+
+	-- gradOutput (batchsize*)vecsize
+	-- gradScore seqlen(*batchsize)
+	local gradScore = src.new()
+	if _sdim == 2 then
+		gradScore:resize(seqlen, _iSize[2])
+	else
+		gradScore:resize(seqlen)
+	end
+	for _ = 1, seqlen do
+		gradScore[_]:copy(torch.cmul(src[_], gradOutput):sum(_sdim))
+	end
+
 	self.gradInput = self.module:backward(input, gradScore, scale)-- {seqlen(*batchsize)*vecsize, (batchsize*)vecsize}
-	local score = table.remove(self._score, self.rindex)-- seqlen(*batchsize)*vecsize
-	self.gradInput[1]:add(torch.cmul(gradOutput, score))
+	local _srcsize = src[1]:size()
+	local _rsize = src[1]:size()
+	_rsize[_sdim] = 1
+	local gradSrc = self.gradInput[1]
+	for _ = 1, seqlen do
+		gradSrc[_]:add(torch.cmul(gradOutput, self.score[_]:reshape(_rsize):expand(_srcsize)))
+	end
+	self.score = nil
 
 	return self.gradInput
 
 end
 
+function aTtention:_maskZero(std, score)
+
+	local std_zero = std[1]:clone():zero()
+	for _ = 1, std:size(1) do
+		if std[_]:equal(std_zero) then
+			score[_]:zero()
+		end
+	end
+
+end
+
 function aTtention:updateOutput(input)
 
+	self.gradInput = nil
+	self.output = nil
 	local score = self.module:updateOutput(input)-- seqlen(*batchsize)
+
 	local src = input[1]
 	local _iSize = src:size()
-	local ndim = #_iSize
-	_iSize[ndim] = 1
-	score = score:reshape(_iSize)-- seqlen(*batchsize)*1
-	_iSize[ndim] = self.vecsize
-	score = score:expand(_iSize)-- seqlen(*batchsize)*vecsize
+	local _sdim = #_iSize - 1
+	local seqlen = _iSize[1]
+
 	if self.train then
-		table.insert(self._score, score)
+		self.score = score
 	end
-	local output = torch.cmul(score, src):sum(1)-- 1(*batchsize)*vecsize
-	if ndim == 3 then
-		batchsize = _iSize[2]
-		self.output = output:reshape(batchsize, self.vecsize)-- batchsize*vecsize
-	else
-		self.output = output:reshape(self.vecsize) 
+
+	local output
+	local _srcsize = src[1]:size()
+	local _rsize = src[1]:size()
+	_rsize[_sdim] = 1
+	for _ = 1, seqlen do
+		if _ == 1 then
+			output = torch.cmul(src[_], score[_]:reshape(_rsize):expand(_srcsize))
+		else
+			output:add(torch.cmul(src[_], score[_]:reshape(_rsize):expand(_srcsize)))
+		end
 	end
+
+	if self.maskzero then
+		self:_maskZero(input[2], output)
+	end
+
+	self.output = output
 
 	return self.output
 
@@ -104,22 +134,12 @@ function aTtention:updateGradInput(input, gradOutput)
 	return self:backward(input, gradOutput)
 end
 
-function aTtention:prepare()
-
-	require "aSeqBiLinearScore"
-	nn.aSequential = nn.Sequential
-	nn.aTranspose = nn.Transpose
-	require "aSeqSoftMax"
-	nn.aSoftMax = nn.aSeqSoftMax
-
-end
-
 function aTtention:reset()
 
 	self.module = nn.Sequential()
-		:add(nn.aSeqBiLinearScore(self.vecsize, self.rindex==nil))
+		:add(nn.aBiLinearScore(self.vecsize))
 		--:add(nn.aTranspose({1,2}))
-		:add(nn.aSoftMax(self.rindex==nil, true))
+		:add(nn.aSoftMax(true))
 		--:add(nn.aTranspose({1,2}))
 
 	self.modules = {self.module}
@@ -130,7 +150,7 @@ end
 -- unless you know what you are doing.
 function aTtention:clearState()
 
-	self._score = {}
+	self.score = nil
 
 end
 

@@ -17,7 +17,8 @@ A library to based on torch.
 
 dependencies = {
 	"torch >= 7.0",
-	"nn >= 1.0"
+	"nn >= 1.0",
+	"rnn >= 1.0"
 }
 
 build = {
@@ -33,7 +34,9 @@ build = {
 		aLSTM = "aLSTM.lua",
 		aFastLSTM = "aFastLSTM.lua",
 		aFastLSTMP = "aFastLSTMP.lua",
-		aSeqBiLinear = "dep/aSeqBiLinear.lua",
-		aTtention = "dep/aTtention.lua"
+		aBiLinearScore = "dep/aBiLinearScore.lua",
+		aTtention = "dep/aTtention.lua",
+		aBstractNMT = "model/NMT/aBstractNMT.lua"，
+		aGlobalAttentionNMT = "model/NMT/aGlobalAttentionNMT.lua"
 	}
 }

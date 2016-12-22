@@ -53,6 +53,8 @@ end
 
 function aSeqTanh:updateOutput(input)
 
+	self.gradInput = nil
+
 	local output = input.new()
 	output:resizeAs(input)
 
@@ -70,6 +72,8 @@ function aSeqTanh:updateOutput(input)
 end
 
 function aSeqTanh:updateGradInput(input, gradOutput)
+
+	self.output = nil
 
 	local output = table.remove(self._output, self.rindex)
 

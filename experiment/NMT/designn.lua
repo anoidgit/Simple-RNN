@@ -11,37 +11,17 @@
 
 require "dpnn"
 require "rnn"
+require "nngraph"
 require "SeqDropout"
 require "vecLookup"
 require "maskZerovecLookup"
 require "ASequencerCriterion"
 
-require "aSeqSigmoid"
-require "aSeqTanh"
-require "aBstractBase"
-require "aBstractSeq"
-require "aBstractStep"
-require "aRepeat"
--- aSeqLSTM and aStepLSTM was just aLSTM derived from different parent class: aBstractSeq and aBstractStep
-require "aSeqLSTM"
-require "aStepLSTM"
+require "nngraph"
+require "dep.gmodule"
+require "dep.Sequencer"
 
-nn.aTanh = nn.aSeqTanh
-nn.aSigmoid = nn.aSeqSigmoid
-nn.aLinear = nn.Linear
-nn.aSequential = nn.Sequential
-nn.aJoinTable = nn.JoinTable
-nn.aNarrowTable = nn.NarrowTable
-nn.aSelectTable = nn.SelectTable
-nn.aCMul = nn.CMul
-nn.aCAddTable = nn.CAddTable
-nn.aConcatTable = nn.ConcatTable
-
-require "aSeqBiLinearScore"
-require "aTtention"
-
-require "aBstractNMT"
-require "aGlobalAttentionNMT"
+require "prepare_module"
 
 function getnn()
 	--return getonn()
@@ -64,29 +44,47 @@ function getnnn()
 
 	local encoder = buildEncoder()
 	local decoder = buildDecoder()
-	local attention = nn.aTtention(sizvec, true)
-	local classifier = nn.NCEModule(sizvec * 2, nclass, knegsample, unigrams)
-	local NMT = nn.aGlobalAttentionNMT(encoder, decoder, attention, classifier)
-	local nnmod = nn.Sequential()
+	local attention = nn.Recursor(nn.aTtention(sizvec, true))
+	local classifier = nn.MaskZero(nn.NCEModule(sizvec * 2, nclass, knegsample, unigrams), 1)
+	local NMT = nn.aGlobalAttentionNMT(encoder, decoder, attention, classifier, eosid, nil, true)
+	local transfer = nn.aTransfer(eosid)
+	local nnmod = buildNMT(id2vec,NMT,nn.Sequencer(classifier),nn.Sequencer(nn.Sequential():add(nn.JoinTable(2,2)):add(nn.Dropout(pDropout,nil,nil,true))),transfer)--[[nn.Sequential()
 		:add(nn.ConcatTable()
 			:add(nn.Sequential()
 				:add(nn.ParallelTable()
 					:add(id2vec)
 					:add(nn.Identity()))
-				:add(NMT))
+				:add(NMT)
+				:add(nn.Sequencer(nn.JoinTable(2,2))))
 			:add(nn.SelectTable(-1)))
 		:add(nn.ZipTable())
+		:add(nn.Sequencer(classifier))]]
 	
 	return nnmod
+end
+
+function buildNMT(id2vec,NMT,classifier,pNMT,transfer)
+	local i1=id2vec()
+	local i2=nn.Identity()()
+	local oNMT=NMT({i1,i2})
+	local poNMT=pNMT(oNMT)
+	local zo=nn.ZipTable()({poNMT,transfer(i2)})
+	local output = classifier(zo)
+	return nn.gModule({i1,i2}, {output})
 end
 
 function buildEncoder()
 
 	local nnmod = nn.Sequential()
 		:add(nn.SeqDropout(pDropout))
-	local inputSize = sizvec
+		--[[:add(nn.ConcatTable()
+			:add(nn.Narrow(1,1,-2))
+			:add(nn.Narrow(1,2,-1)))
+		:add(nn.JoinTable(2,2))
+		:add(nn.SplitTable(1))]]
+	local inputSize = sizvec-- * 2
 	for _, hsize in ipairs(hiddenSize) do
-		nnmod:add(nn.aSeqLSTM(inputSize, hsize, true))
+		nnmod:add(nn.aSeqGRU(inputSize, hsize, true))
 		nnmod:add(nn.Sequencer(nn.NormStabilizer()))
 		inputSize = hsize
 	end
@@ -97,23 +95,25 @@ end
 function buildDecoder()
 
 	local nnmod = nn.Sequential()
-		:add(nn.SeqDropout(pDropout))
+		:add(nn.JoinTable(2,2))
+		--:add(nn.Dropout(pDropout,nil,nil,true))
 	local inputSize = sizvec * 2
 	for _, hsize in ipairs(hiddenSize) do
-		nnmod:add(nn.aStepLSTM(inputSize, hsize, true))
-		nnmod:add(nn.Sequencer(nn.NormStabilizer()))
+		nnmod:add(nn.aStepGRU(inputSize, hsize, true))
+		nnmod:add(nn.NormStabilizer())
 		inputSize = hsize
 	end
+	--nnmod:add(nn.Dropout(pDropout,nil,nil,true))
 	return nnmod
 
 end
 
 function getcrit()
-	return nn.ASequencerCriterion(nn.MaskZeroCriterion(nn.NCECriterion(),1));
+	return nn.ASequencerCriterion(nn.MaskZeroCriterion(nn.NCECriterion(),0));
 end
 
 function setupvec(modin,value)
-	modin:get(1):get(1):get(1):get(1).updatevec = value
+	--modin:get(1):get(1):get(1):get(1).updatevec = value
 end
 
 function dupvec(modin)
@@ -125,7 +125,7 @@ function upvec(modin)
 end
 
 function setnormvec(modin,value)
-	modin:get(1):get(1):get(1):get(1).usenorm = value
+	--modin:get(1):get(1):get(1):get(1).usenorm = value
 end
 
 function dnormvec(modin)
