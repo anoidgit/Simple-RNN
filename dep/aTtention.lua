@@ -7,7 +7,7 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.7
+	Version 0.0.8
 
 ]]
 
@@ -139,7 +139,7 @@ function aTtention:reset()
 	self.module = nn.Sequential()
 		:add(nn.aBiLinearScore(self.vecsize))
 		--:add(nn.aTranspose({1,2}))
-		:add(nn.aSoftMax(true))
+		:add(nn.aTSoftMax(true))
 		--:add(nn.aTranspose({1,2}))
 
 	self.modules = {self.module}
