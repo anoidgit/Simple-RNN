@@ -1,7 +1,7 @@
 --[[require "dep.aSeqSigmoid"
 require "dep.aSeqSoftMax"]]--
 --require "dep.aSeqTanh"
-require "dep.aSoftMax"
+require "dep.aTSoftMax"
 require "dep.aBstractBase"
 require "dep.aBstractSeq"
 require "dep.aBstractStep"
@@ -27,4 +27,3 @@ require "module.aTtention"
 
 require "dep.aBstractNMT"
 require "module.aGlobalAttentionNMT"
-
