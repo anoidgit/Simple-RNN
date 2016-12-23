@@ -9,13 +9,13 @@
 
 	Designed for Recurrent Neural Networks
 
-	Version 0.0.1
+	Version 0.0.2
 
 ]]
 
-local aSoftMax = torch.class('nn.aSoftMax', 'nn.Module')
+local aSoftMax = torch.class('nn.aTSoftMax', 'nn.Module')
 
-function aSoftMax:__init(transpose)
+function aTSoftMax:__init(transpose)
 
 	self.transpose = transpose
 
@@ -24,7 +24,7 @@ function aSoftMax:__init(transpose)
 end
 
 -- evaluate
-function aSoftMax:evaluate()
+function aTSoftMax:evaluate()
 
 	self.train = false
 
@@ -33,7 +33,7 @@ function aSoftMax:evaluate()
 end
 
 -- train
-function aSoftMax:training()
+function aTSoftMax:training()
 
 	self.train = true
 
@@ -41,13 +41,13 @@ function aSoftMax:training()
 
 end
 
-function aSoftMax:backward(input, gradOutput, scale)
+function aTSoftMax:backward(input, gradOutput, scale)
 
 	return self:updateGradInput(input, gradOutput)
 
 end
 
-function aSoftMax:updateOutput(input)
+function aTSoftMax:updateOutput(input)
 
 	self.gradInput = nil
 
@@ -78,7 +78,7 @@ function aSoftMax:updateOutput(input)
 
 end
 
-function aSoftMax:updateGradInput(input, gradOutput)
+function aTSoftMax:updateGradInput(input, gradOutput)
 
 	local gradInput = input.new()
 	gradInput:resizeAs(input)
